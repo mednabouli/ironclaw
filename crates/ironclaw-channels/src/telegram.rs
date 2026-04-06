@@ -6,7 +6,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use teloxide::dispatching::UpdateFilterExt;
 use teloxide::prelude::*;
 use teloxide::types::ChatAction;
@@ -36,47 +38,56 @@ impl Channel for TelegramChannel {
         "telegram"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let bot = Bot::new(&self.token);
-        let shutdown = self.shutdown.clone();
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let bot = Bot::new(&self.token);
+            let shutdown = self.shutdown.clone();
 
-        info!("TelegramChannel starting long-poll loop");
+            info!("TelegramChannel starting long-poll loop");
 
-        let handler_clone = handler.clone();
+            let handler_clone = handler.clone();
 
-        let message_handler = Update::filter_message().endpoint(move |msg: Message, bot: Bot| {
-            let handler = handler_clone.clone();
-            async move {
-                handle_message(msg, &handler, &bot).await;
-                respond(())
+            let message_handler =
+                Update::filter_message().endpoint(move |msg: Message, bot: Bot| {
+                    let handler = handler_clone.clone();
+                    async move {
+                        handle_message(msg, &handler, &bot).await;
+                        respond(())
+                    }
+                });
+
+            let mut dispatcher = Dispatcher::builder(bot.clone(), message_handler).build();
+
+            tokio::select! {
+                () = async { dispatcher.dispatch().await } => {},
+                () = shutdown.notified() => {
+                    info!("TelegramChannel shutdown signal received");
+                },
             }
-        });
 
-        let mut dispatcher = Dispatcher::builder(bot.clone(), message_handler).build();
-
-        tokio::select! {
-            () = async { dispatcher.dispatch().await } => {},
-            () = shutdown.notified() => {
-                info!("TelegramChannel shutdown signal received");
-            },
-        }
-
-        Ok(())
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> anyhow::Result<()> {
-        let chat_id = match to {
-            ChannelId::Telegram(id) => ChatId(*id),
-            other => anyhow::bail!("TelegramChannel cannot send to {other:?}"),
-        };
+    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError> {
+        (async {
+            let chat_id = match to {
+                ChannelId::Telegram(id) => ChatId(*id),
+                other => anyhow::bail!("TelegramChannel cannot send to {other:?}"),
+            };
 
-        let bot = Bot::new(&self.token);
-        bot.send_message(chat_id, message.as_str()).await?;
-        debug!(chat_id = %chat_id, "Sent outbound message via Telegram");
-        Ok(())
+            let bot = Bot::new(&self.token);
+            bot.send_message(chat_id, message.as_str()).await?;
+            debug!(chat_id = %chat_id, "Sent outbound message via Telegram");
+            Ok(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("TelegramChannel stopping");
         self.shutdown.notify_one();
         Ok(())
@@ -114,14 +125,13 @@ async fn handle_message(msg: Message, handler: &Arc<dyn MessageHandler>, bot: &B
         .and_then(|u| u.username.clone())
         .or_else(|| msg.from.as_ref().map(|u| u.first_name.clone()));
 
-    let inbound = InboundMessage {
-        id: msg.id.0.to_string(),
-        channel: ChannelId::Telegram(chat_id.0),
-        session_id,
-        content,
-        author,
-        timestamp: chrono::Utc::now(),
-    };
+    let mut inbound_builder = InboundMessage::builder(ChannelId::Telegram(chat_id.0), content)
+        .id(msg.id.0.to_string())
+        .session_id(session_id);
+    if let Some(author_name) = author {
+        inbound_builder = inbound_builder.author(author_name);
+    }
+    let inbound = inbound_builder.build();
 
     debug!(chat_id = %chat_id, msg_id = %inbound.id, "Processing Telegram message");
 

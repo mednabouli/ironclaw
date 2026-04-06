@@ -15,7 +15,9 @@ use axum::{
     routing::post,
     Json, Router,
 };
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tracing::{info, warn};
@@ -95,14 +97,13 @@ async fn handle_webhook(
         .session_id
         .unwrap_or_else(|| format!("webhook-{}", uuid::Uuid::new_v4()));
 
-    let inbound = InboundMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        channel: ChannelId::Webhook(session_id.clone()),
-        session_id: session_id.clone(),
-        content: payload.content,
-        author: payload.author,
-        timestamp: chrono::Utc::now(),
-    };
+    let mut inbound_builder =
+        InboundMessage::builder(ChannelId::Webhook(session_id.clone()), payload.content)
+            .session_id(session_id.clone());
+    if let Some(author_name) = payload.author {
+        inbound_builder = inbound_builder.author(author_name);
+    }
+    let inbound = inbound_builder.build();
 
     match state.handler.handle(inbound).await {
         Ok(Some(out)) => Ok(Json(WebhookResponse {
@@ -123,34 +124,38 @@ impl Channel for WebhookChannel {
         "webhook"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let state = WebhookState {
-            handler,
-            auth_token: self.auth_token.clone(),
-        };
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let state = WebhookState {
+                handler,
+                auth_token: self.auth_token.clone(),
+            };
 
-        let app = Router::new()
-            .route(&self.path, post(handle_webhook))
-            .with_state(state);
+            let app = Router::new()
+                .route(&self.path, post(handle_webhook))
+                .with_state(state);
 
-        let addr = format!("{}:{}", self.host, self.port);
-        let listener = tokio::net::TcpListener::bind(&addr).await?;
-        info!(addr = %addr, path = %self.path, "WebhookChannel listening");
+            let addr = format!("{}:{}", self.host, self.port);
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            info!(addr = %addr, path = %self.path, "WebhookChannel listening");
 
-        let shutdown = self.shutdown.clone();
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move { shutdown.notified().await })
-            .await?;
+            let shutdown = self.shutdown.clone();
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move { shutdown.notified().await })
+                .await?;
 
-        Ok(())
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> anyhow::Result<()> {
+    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> Result<(), ChannelError> {
         // Webhooks are inbound-only; responses are returned synchronously.
         Ok(())
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("WebhookChannel stopping");
         self.shutdown.notify_one();
         Ok(())

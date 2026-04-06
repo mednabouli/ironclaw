@@ -33,7 +33,7 @@ impl CriticActorPair {
     ) -> Self {
         Self {
             ctx,
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
             actor,
             critic,
             max_rounds: max_rounds.max(1),
@@ -51,7 +51,7 @@ impl Agent for CriticActorPair {
         AgentRole::Critic
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let span = tracing::info_span!(
             "critic_actor.run",
             agent_id = %self.id,
@@ -85,13 +85,9 @@ impl Agent for CriticActorPair {
                 actor_task.instruction, actor_output.text
             );
 
-            let critic_task = AgentTask {
-                id: uuid::Uuid::new_v4(),
-                instruction: critic_instruction,
-                context: vec![],
-                tool_allowlist: None,
-                max_tokens: actor_task.max_tokens,
-            };
+            let critic_task = AgentTask::builder(critic_instruction)
+                .max_tokens(actor_task.max_tokens.unwrap_or(4096))
+                .build();
 
             let critic_output = self.critic.run(critic_task).await?;
             let approved = critic_output.text.to_uppercase().contains("APPROVED");
@@ -104,34 +100,32 @@ impl Agent for CriticActorPair {
             );
 
             if approved {
-                return Ok(AgentOutput {
-                    task_id: task.id,
-                    agent_id: self.id.clone(),
-                    text: actor_output.text,
-                    tool_calls: actor_output.tool_calls,
-                    approved: true,
-                    usage: TokenUsage {
-                        prompt_tokens: actor_output.usage.prompt_tokens
-                            + critic_output.usage.prompt_tokens,
-                        completion_tokens: actor_output.usage.completion_tokens
-                            + critic_output.usage.completion_tokens,
-                        total_tokens: actor_output.usage.total_tokens
-                            + critic_output.usage.total_tokens,
-                    },
-                });
+                return Ok(
+                    AgentOutput::new(task.id, self.id.clone(), actor_output.text)
+                        .with_tool_calls(actor_output.tool_calls)
+                        .with_approved(true)
+                        .with_usage(TokenUsage::new(
+                            actor_output.usage.prompt_tokens + critic_output.usage.prompt_tokens,
+                            actor_output.usage.completion_tokens
+                                + critic_output.usage.completion_tokens,
+                            actor_output.usage.total_tokens + critic_output.usage.total_tokens,
+                        )),
+                );
             }
 
             // Feed criticism back to actor for next round
-            actor_task = AgentTask {
-                id: uuid::Uuid::new_v4(),
-                instruction: format!(
-                    "{}\n\nPrevious attempt:\n{}\n\nCritic feedback:\n{}",
-                    task.instruction, actor_output.text, critic_output.text
-                ),
-                context: actor_task.context.clone(),
-                tool_allowlist: actor_task.tool_allowlist.clone(),
-                max_tokens: actor_task.max_tokens,
-            };
+            let mut next_builder = AgentTask::builder(format!(
+                "{}\\n\\nPrevious attempt:\\n{}\\n\\nCritic feedback:\\n{}",
+                task.instruction, actor_output.text, critic_output.text
+            ))
+            .context(actor_task.context.clone());
+            if let Some(allowlist) = actor_task.tool_allowlist.clone() {
+                next_builder = next_builder.tool_allowlist(allowlist);
+            }
+            if let Some(mt) = actor_task.max_tokens {
+                next_builder = next_builder.max_tokens(mt);
+            }
+            actor_task = next_builder.build();
 
             last_output = Some(actor_output);
         }
@@ -139,14 +133,10 @@ impl Agent for CriticActorPair {
         // Exhausted all rounds — return last actor output as not-approved
         warn!(max_rounds = self.max_rounds, "Critic never approved");
         let output = last_output.ok_or_else(|| anyhow::anyhow!("No actor output produced"))?;
-        Ok(AgentOutput {
-            task_id: task.id,
-            agent_id: self.id.clone(),
-            text: output.text,
-            tool_calls: output.tool_calls,
-            approved: false,
-            usage: output.usage,
-        })
+        Ok(AgentOutput::new(task.id, self.id.clone(), output.text)
+            .with_tool_calls(output.tool_calls)
+            .with_approved(false)
+            .with_usage(output.usage))
     }
 }
 
@@ -168,15 +158,8 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: self.answer.clone(),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(AgentOutput::new(task.id, self.id.clone(), self.answer.clone()).with_approved(true))
         }
     }
 
@@ -193,15 +176,11 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Critic
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: "APPROVED — looks great!".into(),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(
+                AgentOutput::new(task.id, self.id.clone(), "APPROVED — looks great!")
+                    .with_approved(true),
+            )
         }
     }
 
@@ -218,15 +197,12 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Critic
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: "Not good enough, try harder.".into(),
-                tool_calls: vec![],
-                approved: false,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(AgentOutput::new(
+                task.id,
+                self.id.clone(),
+                "Not good enough, try harder.",
+            ))
         }
     }
 

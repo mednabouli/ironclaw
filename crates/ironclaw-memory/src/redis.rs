@@ -4,7 +4,7 @@
 //! Messages are JSON-encoded and trimmed to `max_history` on every push.
 
 use async_trait::async_trait;
-use ironclaw_core::{MemoryStore, Message, SearchHit, SessionId};
+use ironclaw_core::{MemoryError, MemoryStore, Message, SearchHit, SessionId};
 use redis::AsyncCommands;
 use tracing::warn;
 
@@ -66,124 +66,146 @@ impl RedisStore {
 
 #[async_trait]
 impl MemoryStore for RedisStore {
-    async fn push(&self, session: &SessionId, msg: Message) -> anyhow::Result<()> {
-        let mut conn = self.conn().await?;
-        let key = self.session_key(session);
-        let json = serde_json::to_string(&msg)
-            .map_err(|e| anyhow::anyhow!("Message serialization failed: {e}"))?;
+    async fn push(&self, session: &SessionId, msg: Message) -> Result<(), MemoryError> {
+        let r: anyhow::Result<()> = (async {
+            let mut conn = self.conn().await?;
+            let key = self.session_key(session);
+            let json = serde_json::to_string(&msg)
+                .map_err(|e| anyhow::anyhow!("Message serialization failed: {e}"))?;
 
-        // RPUSH to append, LTRIM to cap
-        let _: () = conn
-            .rpush(&key, &json)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis RPUSH failed: {e}"))?;
+            // RPUSH to append, LTRIM to cap
+            let _: () = conn
+                .rpush(&key, &json)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis RPUSH failed: {e}"))?;
 
-        // Trim to keep only the last max_history messages
-        let _: () = conn
-            .ltrim(&key, -(self.max_history as isize), -1)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis LTRIM failed: {e}"))?;
+            // Trim to keep only the last max_history messages
+            let _: () = conn
+                .ltrim(&key, -(self.max_history as isize), -1)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis LTRIM failed: {e}"))?;
 
-        // Track this session in the sessions set with its latest timestamp
-        let ts = msg.timestamp.timestamp_millis();
-        let _: () = conn
-            .zadd(self.sessions_set_key(), session.as_str(), ts as f64)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis ZADD failed: {e}"))?;
+            // Track this session in the sessions set with its latest timestamp
+            let ts = msg.timestamp.timestamp_millis();
+            let _: () = conn
+                .zadd(self.sessions_set_key(), session.as_str(), ts as f64)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis ZADD failed: {e}"))?;
 
-        Ok(())
+            Ok(())
+        })
+        .await;
+        r.map_err(Into::into)
     }
 
-    async fn history(&self, session: &SessionId, limit: usize) -> anyhow::Result<Vec<Message>> {
-        let mut conn = self.conn().await?;
-        let key = self.session_key(session);
+    async fn history(
+        &self,
+        session: &SessionId,
+        limit: usize,
+    ) -> Result<Vec<Message>, MemoryError> {
+        let r: anyhow::Result<Vec<Message>> = (async {
+            let mut conn = self.conn().await?;
+            let key = self.session_key(session);
 
-        // Get the last `limit` messages
-        let start = -(limit as isize);
-        let items: Vec<String> = conn
-            .lrange(&key, start, -1)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis LRANGE failed: {e}"))?;
-
-        let mut messages = Vec::with_capacity(items.len());
-        for json in &items {
-            match serde_json::from_str::<Message>(json) {
-                Ok(msg) => messages.push(msg),
-                Err(e) => {
-                    warn!(error = %e, "Skipping corrupt message in Redis");
-                }
-            }
-        }
-        Ok(messages)
-    }
-
-    async fn clear(&self, session: &SessionId) -> anyhow::Result<()> {
-        let mut conn = self.conn().await?;
-        let key = self.session_key(session);
-
-        let _: () = conn
-            .del(&key)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis DEL failed: {e}"))?;
-
-        let _: () = conn
-            .zrem(self.sessions_set_key(), session.as_str())
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis ZREM failed: {e}"))?;
-
-        Ok(())
-    }
-
-    async fn sessions(&self) -> anyhow::Result<Vec<SessionId>> {
-        let mut conn = self.conn().await?;
-
-        // ZREVRANGEBYSCORE returns most-recently-active first
-        let ids: Vec<String> = conn
-            .zrevrange(self.sessions_set_key(), 0, -1)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis ZREVRANGE failed: {e}"))?;
-
-        Ok(ids)
-    }
-
-    async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SearchHit>> {
-        let mut conn = self.conn().await?;
-        let q = query.to_lowercase();
-
-        // Get all session IDs
-        let session_ids: Vec<String> = conn
-            .zrevrange(self.sessions_set_key(), 0, -1)
-            .await
-            .map_err(|e| anyhow::anyhow!("Redis ZREVRANGE failed: {e}"))?;
-
-        let mut hits: Vec<SearchHit> = Vec::new();
-
-        for sid in &session_ids {
-            let key = self.session_key(sid);
+            // Get the last `limit` messages
+            let start = -(limit as isize);
             let items: Vec<String> = conn
-                .lrange(&key, 0, -1)
+                .lrange(&key, start, -1)
                 .await
                 .map_err(|e| anyhow::anyhow!("Redis LRANGE failed: {e}"))?;
 
+            let mut messages = Vec::with_capacity(items.len());
             for json in &items {
-                if let Ok(msg) = serde_json::from_str::<Message>(json) {
-                    if msg.content.to_lowercase().contains(&q) {
-                        hits.push(SearchHit {
-                            session_id: sid.clone(),
-                            message: msg,
-                        });
+                match serde_json::from_str::<Message>(json) {
+                    Ok(msg) => messages.push(msg),
+                    Err(e) => {
+                        warn!(error = %e, "Skipping corrupt message in Redis");
                     }
                 }
             }
+            Ok(messages)
+        })
+        .await;
+        r.map_err(Into::into)
+    }
 
-            if hits.len() >= limit {
-                break;
+    async fn clear(&self, session: &SessionId) -> Result<(), MemoryError> {
+        let r: anyhow::Result<()> = (async {
+            let mut conn = self.conn().await?;
+            let key = self.session_key(session);
+
+            let _: () = conn
+                .del(&key)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis DEL failed: {e}"))?;
+
+            let _: () = conn
+                .zrem(self.sessions_set_key(), session.as_str())
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis ZREM failed: {e}"))?;
+
+            Ok(())
+        })
+        .await;
+        r.map_err(Into::into)
+    }
+
+    async fn sessions(&self) -> Result<Vec<SessionId>, MemoryError> {
+        let r: anyhow::Result<Vec<SessionId>> = (async {
+            let mut conn = self.conn().await?;
+
+            // ZREVRANGEBYSCORE returns most-recently-active first
+            let ids: Vec<String> = conn
+                .zrevrange(self.sessions_set_key(), 0, -1)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis ZREVRANGE failed: {e}"))?;
+
+            Ok(ids.into_iter().map(SessionId::from).collect())
+        })
+        .await;
+        r.map_err(Into::into)
+    }
+
+    async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>, MemoryError> {
+        let r: anyhow::Result<Vec<SearchHit>> = (async {
+            let mut conn = self.conn().await?;
+            let q = query.to_lowercase();
+
+            // Get all session IDs
+            let session_ids: Vec<String> = conn
+                .zrevrange(self.sessions_set_key(), 0, -1)
+                .await
+                .map_err(|e| anyhow::anyhow!("Redis ZREVRANGE failed: {e}"))?;
+
+            let mut hits: Vec<SearchHit> = Vec::new();
+
+            for sid in &session_ids {
+                let sid_id = SessionId::from(sid.as_str());
+                let key = self.session_key(&sid_id);
+                let items: Vec<String> = conn
+                    .lrange(&key, 0, -1)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Redis LRANGE failed: {e}"))?;
+
+                for json in &items {
+                    if let Ok(msg) = serde_json::from_str::<Message>(json) {
+                        if msg.content.to_lowercase().contains(&q) {
+                            hits.push(SearchHit::new(sid.clone(), msg));
+                        }
+                    }
+                }
+
+                if hits.len() >= limit {
+                    break;
+                }
             }
-        }
 
-        hits.sort_by(|a, b| b.message.timestamp.cmp(&a.message.timestamp));
-        hits.truncate(limit);
-        Ok(hits)
+            hits.sort_by(|a, b| b.message.timestamp.cmp(&a.message.timestamp));
+            hits.truncate(limit);
+            Ok(hits)
+        })
+        .await;
+        r.map_err(Into::into)
     }
 }
 
@@ -202,7 +224,10 @@ mod tests {
             prefix: "test:".to_string(),
             max_history: 50,
         };
-        assert_eq!(store.session_key(&"abc".to_string()), "test:session:abc");
+        assert_eq!(
+            store.session_key(&SessionId::from("abc")),
+            "test:session:abc"
+        );
         assert_eq!(store.sessions_set_key(), "test:sessions");
     }
 
@@ -215,7 +240,7 @@ mod tests {
             max_history: 100,
         };
         assert_eq!(
-            store.session_key(&"user-123".to_string()),
+            store.session_key(&SessionId::from("user-123")),
             "ironclaw:session:user-123"
         );
     }
@@ -226,7 +251,7 @@ mod tests {
         let store = RedisStore::new("redis://127.0.0.1:6379", "ironclaw_test:", 50)
             .await
             .expect("Redis connection failed — is Redis running?");
-        let sid = format!("test-{}", uuid::Uuid::new_v4());
+        let sid = SessionId::from(format!("test-{}", uuid::Uuid::new_v4()));
 
         store.push(&sid, Message::user("hello")).await.unwrap();
         store.push(&sid, Message::assistant("world")).await.unwrap();
@@ -246,7 +271,7 @@ mod tests {
         let store = RedisStore::new("redis://127.0.0.1:6379", "ironclaw_test:", 50)
             .await
             .expect("Redis connection failed — is Redis running?");
-        let sid = format!("test-{}", uuid::Uuid::new_v4());
+        let sid = SessionId::from(format!("test-{}", uuid::Uuid::new_v4()));
 
         store.push(&sid, Message::user("data")).await.unwrap();
 
@@ -264,7 +289,7 @@ mod tests {
         let store = RedisStore::new("redis://127.0.0.1:6379", "ironclaw_test:", 50)
             .await
             .expect("Redis connection failed — is Redis running?");
-        let sid = format!("test-{}", uuid::Uuid::new_v4());
+        let sid = SessionId::from(format!("test-{}", uuid::Uuid::new_v4()));
 
         store
             .push(&sid, Message::user("hello world"))

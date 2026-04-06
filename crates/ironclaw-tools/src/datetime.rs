@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use serde_json::{json, Value};
 
 pub struct DateTimeTool;
@@ -14,20 +14,20 @@ impl Tool for DateTimeTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "timezone": { "type": "string", "description": "IANA timezone e.g. UTC, America/Toronto", "default": "UTC" }
                 },
                 "required": []
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
         let tz_str = params
             .get("timezone")
             .and_then(|v| v.as_str())

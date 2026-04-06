@@ -20,18 +20,13 @@ fn bench_completion_request_simple(c: &mut Criterion) {
 }
 
 fn bench_completion_request_serde(c: &mut Criterion) {
-    let req = CompletionRequest {
-        messages: vec![
-            Message::system("You are a helpful assistant."),
-            Message::user("Explain Rust ownership in one paragraph."),
-        ],
-        tools: vec![],
-        max_tokens: Some(500),
-        temperature: Some(0.7),
-        stream: false,
-        model: None,
-        response_format: Default::default(),
-    };
+    let req = CompletionRequest::builder(vec![
+        Message::system("You are a helpful assistant."),
+        Message::user("Explain Rust ownership in one paragraph."),
+    ])
+    .max_tokens(500)
+    .temperature(0.7)
+    .build();
 
     c.bench_function("CompletionRequest serialize", |b| {
         b.iter(|| serde_json::to_string(black_box(&req)).unwrap());
@@ -44,17 +39,13 @@ fn bench_completion_request_serde(c: &mut Criterion) {
 }
 
 fn bench_completion_response_serde(c: &mut Criterion) {
-    let resp = CompletionResponse {
-        message: Message::assistant("Rust ownership is a system of rules..."),
-        usage: TokenUsage {
-            prompt_tokens: 25,
-            completion_tokens: 50,
-            total_tokens: 75,
-        },
-        stop_reason: StopReason::EndTurn,
-        model: "test-model".to_string(),
-        latency_ms: 42,
-    };
+    let resp = CompletionResponse::new(
+        Message::assistant("Rust ownership is a system of rules..."),
+        StopReason::EndTurn,
+        TokenUsage::new(25, 50, 75),
+        "test-model",
+        42,
+    );
 
     c.bench_function("CompletionResponse serialize", |b| {
         b.iter(|| serde_json::to_string(black_box(&resp)).unwrap());

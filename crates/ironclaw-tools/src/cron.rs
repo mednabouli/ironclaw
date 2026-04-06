@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use serde_json::{json, Value};
 use tracing::{debug, info, warn};
 
@@ -57,10 +57,10 @@ impl Tool for CronTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "action": {
@@ -83,20 +83,26 @@ impl Tool for CronTool {
                 },
                 "required": ["action"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let action = params["action"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'action' parameter"))?;
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        (async move {
+            let action = params["action"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'action' parameter"))?;
 
-        match action {
-            "schedule" => self.schedule(&params).await,
-            "list" => self.list_tasks(),
-            "cancel" => self.cancel(&params),
-            _ => anyhow::bail!("Unknown action: '{action}'. Use 'schedule', 'list', or 'cancel'."),
-        }
+            match action {
+                "schedule" => self.schedule(&params).await,
+                "list" => self.list_tasks(),
+                "cancel" => self.cancel(&params),
+                _ => anyhow::bail!(
+                    "Unknown action: '{action}'. Use 'schedule', 'list', or 'cancel'."
+                ),
+            }
+        })
+        .await
+        .map_err(Into::into)
     }
 }
 

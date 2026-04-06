@@ -1,7 +1,9 @@
 use std::{io::Write, sync::Arc};
 
 use async_trait::async_trait;
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tracing::error;
 
@@ -29,7 +31,7 @@ impl Channel for CliChannel {
         "cli"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
         let stdin = tokio::io::stdin();
         let mut lines = BufReader::new(stdin).lines();
         let session_id = "cli-default".to_string();
@@ -59,14 +61,10 @@ impl Channel for CliChannel {
                 break;
             }
 
-            let inbound = InboundMessage {
-                id: uuid::Uuid::new_v4().to_string(),
-                channel: ChannelId::Cli,
-                session_id: session_id.clone(),
-                content: line,
-                author: Some("user".into()),
-                timestamp: chrono::Utc::now(),
-            };
+            let inbound = InboundMessage::builder(ChannelId::Cli, line)
+                .session_id(session_id.clone())
+                .author("user")
+                .build();
 
             print!("\x1b[2m…\x1b[0m");
             std::io::stdout().flush().ok();
@@ -85,12 +83,12 @@ impl Channel for CliChannel {
         Ok(())
     }
 
-    async fn send(&self, _to: &ChannelId, msg: OutboundMessage) -> anyhow::Result<()> {
+    async fn send(&self, _to: &ChannelId, msg: OutboundMessage) -> Result<(), ChannelError> {
         println!("\x1b[1;32mIronClaw\x1b[0m: {}", msg.as_str());
         Ok(())
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         Ok(())
     }
 }

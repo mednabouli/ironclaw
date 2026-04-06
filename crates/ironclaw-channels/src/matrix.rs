@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
@@ -104,61 +106,69 @@ impl Channel for MatrixChannel {
         "matrix"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let client = reqwest::Client::new();
-        let mut since: Option<String> = None;
-        let shutdown = self.shutdown.clone();
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let client = reqwest::Client::new();
+            let mut since: Option<String> = None;
+            let shutdown = self.shutdown.clone();
 
-        info!("MatrixChannel starting sync loop");
+            info!("MatrixChannel starting sync loop");
 
-        loop {
-            tokio::select! {
-                () = shutdown.notified() => {
-                    info!("MatrixChannel shutdown signal received");
-                    break;
-                }
-                result = sync_once(
-                    &client,
-                    &self.homeserver_url,
-                    &self.access_token,
-                    &self.user_id,
-                    since.as_deref(),
-                    &handler,
-                ) => {
-                    match result {
-                        Ok(next_batch) => {
-                            since = Some(next_batch);
-                        }
-                        Err(e) => {
-                            warn!(error = %e, "Matrix sync error, retrying in 5s");
-                            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            loop {
+                tokio::select! {
+                    () = shutdown.notified() => {
+                        info!("MatrixChannel shutdown signal received");
+                        break;
+                    }
+                    result = sync_once(
+                        &client,
+                        &self.homeserver_url,
+                        &self.access_token,
+                        &self.user_id,
+                        since.as_deref(),
+                        &handler,
+                    ) => {
+                        match result {
+                            Ok(next_batch) => {
+                                since = Some(next_batch);
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "Matrix sync error, retrying in 5s");
+                                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                            }
                         }
                     }
                 }
             }
-        }
 
-        Ok(())
-    }
-
-    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> anyhow::Result<()> {
-        let room_id = match to {
-            ChannelId::Matrix(id) => id.as_str(),
-            other => anyhow::bail!("MatrixChannel cannot send to {other:?}"),
-        };
-
-        let client = reqwest::Client::new();
-        send_matrix_message(
-            &client,
-            &self.homeserver_url,
-            &self.access_token,
-            room_id,
-            message.as_str(),
-        )
+            Ok::<(), anyhow::Error>(())
+        })
         .await
+        .map_err(Into::into)
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError> {
+        (async {
+            let room_id = match to {
+                ChannelId::Matrix(id) => id.as_str(),
+                other => anyhow::bail!("MatrixChannel cannot send to {other:?}"),
+            };
+
+            let client = reqwest::Client::new();
+            send_matrix_message(
+                &client,
+                &self.homeserver_url,
+                &self.access_token,
+                room_id,
+                message.as_str(),
+            )
+            .await
+        })
+        .await
+        .map_err(Into::into)
+    }
+
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("MatrixChannel stopping");
         self.shutdown.notify_one();
         Ok(())
@@ -243,14 +253,11 @@ async fn process_event(
     let session_id = format!("matrix-{room_id}");
     let event_id = event.event_id.clone().unwrap_or_default();
 
-    let inbound = InboundMessage {
-        id: event_id,
-        channel: ChannelId::Matrix(room_id.to_string()),
-        session_id,
-        content,
-        author: Some(sender),
-        timestamp: chrono::Utc::now(),
-    };
+    let inbound_builder = InboundMessage::builder(ChannelId::Matrix(room_id.to_string()), content)
+        .id(event_id)
+        .session_id(session_id)
+        .author(sender);
+    let inbound = inbound_builder.build();
 
     match handler.handle(inbound).await {
         Ok(Some(out)) => {

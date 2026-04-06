@@ -48,11 +48,11 @@ impl WasmTool {
 
     /// Create a WASM tool from a plugin manifest.
     pub fn from_manifest(wasm_path: impl Into<PathBuf>, manifest: &PluginManifest) -> Self {
-        let schema = ToolSchema {
-            name: manifest.name.clone(),
-            description: manifest.description.clone(),
-            parameters: manifest.parameters.clone(),
-        };
+        let schema = ToolSchema::new(
+            manifest.name.clone(),
+            manifest.description.clone(),
+            manifest.parameters.clone(),
+        );
         let capabilities = CapabilityGrant {
             capabilities: manifest.capabilities.clone(),
             allowed_urls: manifest.allowed_urls.clone(),
@@ -95,7 +95,7 @@ impl Tool for WasmTool {
         self.schema.clone()
     }
 
-    async fn invoke(&self, _params: Value) -> anyhow::Result<Value> {
+    async fn invoke(&self, _params: Value) -> Result<Value, ironclaw_core::ToolError> {
         warn!(
             plugin = %self.schema.name,
             path = %self.path.display(),
@@ -173,11 +173,11 @@ fn wasm_tool_from_path(path: PathBuf) -> WasmTool {
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let schema = ToolSchema {
-        name: name.clone(),
-        description: format!("WASM plugin: {name}"),
-        parameters: json!({"type": "object", "properties": {}}),
-    };
+    let schema = ToolSchema::new(
+        name.clone(),
+        format!("WASM plugin: {name}"),
+        json!({"type": "object", "properties": {}}),
+    );
     WasmTool::from_file(path, schema)
 }
 
@@ -188,11 +188,7 @@ mod tests {
 
     #[test]
     fn wasm_tool_from_file_has_correct_schema() {
-        let schema = ToolSchema {
-            name: "test-plugin".into(),
-            description: "A test plugin".into(),
-            parameters: json!({"type": "object"}),
-        };
+        let schema = ToolSchema::new("test-plugin", "A test plugin", json!({"type": "object"}));
         let tool = WasmTool::from_file("/tmp/test.wasm", schema);
         assert_eq!(tool.name(), "test-plugin");
         assert_eq!(tool.description(), "A test plugin");

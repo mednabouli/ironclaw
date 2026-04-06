@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use dashmap::DashMap;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use reqwest::Client;
 use serde_json::{json, Value};
 use tracing::debug;
@@ -141,10 +141,10 @@ impl Tool for WebSearchTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "query": {
@@ -154,21 +154,25 @@ impl Tool for WebSearchTool {
                 },
                 "required": ["query"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let query = params["query"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'query' parameter"))?;
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        let result: anyhow::Result<Value> = async {
+            let query = params["query"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'query' parameter"))?;
 
-        if let Some(cached) = self.get_cached(query) {
-            return Ok(cached);
+            if let Some(cached) = self.get_cached(query) {
+                return Ok(cached);
+            }
+
+            let result = self.search_ddg(query).await?;
+            self.set_cached(query, result.clone());
+            Ok(result)
         }
-
-        let result = self.search_ddg(query).await?;
-        self.set_cached(query, result.clone());
-        Ok(result)
+        .await;
+        result.map_err(Into::into)
     }
 }
 

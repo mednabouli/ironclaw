@@ -23,7 +23,7 @@ impl RouterAgent {
     pub fn new(ctx: AgentContext) -> Self {
         Self {
             ctx,
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
             routes: HashMap::new(),
             fallback: None,
         }
@@ -66,7 +66,7 @@ impl Agent for RouterAgent {
         AgentRole::Router
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let span = tracing::info_span!("router.classify", agent_id = %self.id);
         let _guard = span.enter();
         drop(_guard);
@@ -76,15 +76,10 @@ impl Agent for RouterAgent {
         let classify_prompt = self.classification_prompt(&task.instruction);
         debug!(prompt = %classify_prompt, "Classifying intent");
 
-        let req = CompletionRequest {
-            messages: vec![Message::user(&classify_prompt)],
-            tools: vec![],
-            max_tokens: Some(50),
-            temperature: Some(0.0),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        };
+        let req = CompletionRequest::builder(vec![Message::user(&classify_prompt)])
+            .max_tokens(50)
+            .temperature(0.0)
+            .build();
 
         let resp = provider.complete(req).await?;
         let route_name = resp.message.content.trim().to_lowercase();
@@ -124,15 +119,13 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: format!("{}: {}", self.prefix, task.instruction),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(AgentOutput::new(
+                task.id,
+                self.id.clone(),
+                format!("{}: {}", self.prefix, task.instruction),
+            )
+            .with_approved(true))
         }
     }
 

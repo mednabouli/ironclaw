@@ -163,11 +163,7 @@ mod tests {
     #[test]
     fn calculates_openai_cost() {
         let calc = CostCalculator::with_defaults();
-        let usage = TokenUsage {
-            prompt_tokens: 1000,
-            completion_tokens: 500,
-            total_tokens: 1500,
-        };
+        let usage = TokenUsage::new(1000, 500, 1500);
 
         let cost = calc.calculate("openai", "gpt-4o", &usage).unwrap();
 
@@ -184,11 +180,7 @@ mod tests {
     #[test]
     fn ollama_is_free() {
         let calc = CostCalculator::with_defaults();
-        let usage = TokenUsage {
-            prompt_tokens: 10_000,
-            completion_tokens: 5000,
-            total_tokens: 15_000,
-        };
+        let usage = TokenUsage::new(10_000, 5000, 15_000);
 
         let cost = calc.calculate("ollama", "llama3", &usage).unwrap();
         assert!((cost.total_cost).abs() < 1e-10);
@@ -197,11 +189,7 @@ mod tests {
     #[test]
     fn unknown_model_returns_none() {
         let calc = CostCalculator::with_defaults();
-        let usage = TokenUsage {
-            prompt_tokens: 100,
-            completion_tokens: 50,
-            total_tokens: 150,
-        };
+        let usage = TokenUsage::new(100, 50, 150);
 
         assert!(calc.calculate("unknown", "model", &usage).is_none());
     }
@@ -211,11 +199,7 @@ mod tests {
         let mut calc = CostCalculator::new();
         calc.add_model("custom/my-model", ModelPricing::new(1.0, 2.0));
 
-        let usage = TokenUsage {
-            prompt_tokens: 1_000_000,
-            completion_tokens: 1_000_000,
-            total_tokens: 2_000_000,
-        };
+        let usage = TokenUsage::new(1_000_000, 1_000_000, 2_000_000);
 
         let cost = calc.calculate("custom", "my-model", &usage).unwrap();
         assert!((cost.input_cost - 1.0).abs() < 1e-10);

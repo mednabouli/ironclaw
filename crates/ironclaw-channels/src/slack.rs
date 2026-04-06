@@ -7,7 +7,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tracing::{debug, error, info};
@@ -106,14 +108,11 @@ async fn handle_events(
                     let session_id = format!("slack-{channel}-{user}");
                     let msg_id = msg_event.ts.unwrap_or_default();
 
-                    let inbound = InboundMessage {
-                        id: msg_id,
-                        channel: ChannelId::Slack(channel.clone()),
-                        session_id,
-                        content: text,
-                        author: Some(user),
-                        timestamp: chrono::Utc::now(),
-                    };
+                    let inbound = InboundMessage::builder(ChannelId::Slack(channel.clone()), text)
+                        .id(msg_id)
+                        .session_id(session_id)
+                        .author(user)
+                        .build();
 
                     // Process in background to respond to Slack within 3s
                     let handler = state.handler.clone();
@@ -174,39 +173,47 @@ impl Channel for SlackChannel {
         "slack"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let state = SlackState {
-            handler,
-            bot_token: self.bot_token.clone(),
-            signing_secret: self.signing_secret.clone(),
-        };
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let state = SlackState {
+                handler,
+                bot_token: self.bot_token.clone(),
+                signing_secret: self.signing_secret.clone(),
+            };
 
-        let app = Router::new()
-            .route("/slack/events", post(handle_events))
-            .with_state(state);
+            let app = Router::new()
+                .route("/slack/events", post(handle_events))
+                .with_state(state);
 
-        let addr = format!("{}:{}", self.host, self.port);
-        let listener = tokio::net::TcpListener::bind(&addr).await?;
-        info!(addr = %addr, "SlackChannel listening on /slack/events");
+            let addr = format!("{}:{}", self.host, self.port);
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            info!(addr = %addr, "SlackChannel listening on /slack/events");
 
-        let shutdown = self.shutdown.clone();
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move { shutdown.notified().await })
-            .await?;
+            let shutdown = self.shutdown.clone();
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move { shutdown.notified().await })
+                .await?;
 
-        Ok(())
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> anyhow::Result<()> {
-        let channel = match to {
-            ChannelId::Slack(ch) => ch.as_str(),
-            other => anyhow::bail!("SlackChannel cannot send to {other:?}"),
-        };
+    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError> {
+        (async {
+            let channel = match to {
+                ChannelId::Slack(ch) => ch.as_str(),
+                other => anyhow::bail!("SlackChannel cannot send to {other:?}"),
+            };
 
-        post_slack_message(&self.bot_token, channel, message.as_str()).await
+            post_slack_message(&self.bot_token, channel, message.as_str()).await
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("SlackChannel stopping");
         self.shutdown.notify_one();
         Ok(())

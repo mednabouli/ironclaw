@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
+use crate::error::{AgentError, ChannelError, HandlerError, MemoryError, ProviderError, ToolError};
 use crate::types::*;
 
 // ── Provider ──────────────────────────────────────────────────────────────
@@ -18,11 +19,12 @@ pub trait Provider: Send + Sync + 'static {
         false
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse>;
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError>;
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>>;
+    async fn stream(&self, req: CompletionRequest)
+        -> Result<BoxStream<StreamChunk>, ProviderError>;
 
-    async fn health_check(&self) -> anyhow::Result<()>;
+    async fn health_check(&self) -> Result<(), ProviderError>;
 }
 
 // ── Channel ───────────────────────────────────────────────────────────────
@@ -30,23 +32,26 @@ pub trait Provider: Send + Sync + 'static {
 pub trait Channel: Send + Sync + 'static {
     fn name(&self) -> &'static str;
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()>;
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError>;
 
-    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> anyhow::Result<()>;
+    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError>;
 
-    async fn stop(&self) -> anyhow::Result<()>;
+    async fn stop(&self) -> Result<(), ChannelError>;
 }
 
 // ── MessageHandler ────────────────────────────────────────────────────────
 #[async_trait]
 pub trait MessageHandler: Send + Sync + 'static {
     /// Handle an inbound message and return a complete response.
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>>;
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError>;
 
     /// Handle an inbound message and return a stream of events.
     /// The default implementation wraps `handle()` into a single
     /// `TokenDelta` + `Done` sequence.
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         let result = self.handle(msg).await?;
         let events: Vec<anyhow::Result<StreamEvent>> = match result {
             Some(out) => vec![
@@ -68,31 +73,32 @@ pub trait Tool: Send + Sync + 'static {
     fn description(&self) -> &str;
     fn schema(&self) -> ToolSchema;
 
-    async fn invoke(&self, params: serde_json::Value) -> anyhow::Result<serde_json::Value>;
+    async fn invoke(&self, params: serde_json::Value) -> Result<serde_json::Value, ToolError>;
 }
 
 // ── MemoryStore ───────────────────────────────────────────────────────────
 #[async_trait]
 pub trait MemoryStore: Send + Sync + 'static {
     /// Append a message to the session history.
-    async fn push(&self, session: &SessionId, msg: Message) -> anyhow::Result<()>;
+    async fn push(&self, session: &SessionId, msg: Message) -> Result<(), MemoryError>;
 
     /// Retrieve the last `limit` messages for a session, oldest-first.
-    async fn history(&self, session: &SessionId, limit: usize) -> anyhow::Result<Vec<Message>>;
+    async fn history(&self, session: &SessionId, limit: usize)
+        -> Result<Vec<Message>, MemoryError>;
 
     /// Delete all messages for a session.
-    async fn clear(&self, session: &SessionId) -> anyhow::Result<()>;
+    async fn clear(&self, session: &SessionId) -> Result<(), MemoryError>;
 
     /// List all session IDs that have stored messages, most-recently-active first.
     /// Returns an empty vec if the backend does not support listing.
-    async fn sessions(&self) -> anyhow::Result<Vec<SessionId>> {
+    async fn sessions(&self) -> Result<Vec<SessionId>, MemoryError> {
         Ok(vec![])
     }
 
     /// Full-text search across all stored messages.
     /// Returns up to `limit` matching `SearchHit`s, most-recent first.
     /// Returns an empty vec if the backend does not support search.
-    async fn search(&self, query: &str, limit: usize) -> anyhow::Result<Vec<SearchHit>> {
+    async fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>, MemoryError> {
         let _ = (query, limit);
         Ok(vec![])
     }
@@ -104,14 +110,14 @@ pub trait Agent: Send + Sync + 'static {
     fn id(&self) -> &AgentId;
     fn role(&self) -> AgentRole;
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput>;
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError>;
 }
 
 // ── AgentBus ──────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait AgentBus: Send + Sync + 'static {
     fn register(&self, agent: Arc<dyn Agent>);
-    async fn dispatch(&self, id: &AgentId, task: AgentTask) -> anyhow::Result<AgentOutput>;
+    async fn dispatch(&self, id: &AgentId, task: AgentTask) -> Result<AgentOutput, AgentError>;
 }
 
 // ── VectorStore (RAG) ─────────────────────────────────────────────────────
@@ -130,17 +136,20 @@ pub trait VectorStore: Send + Sync + 'static {
         text: &str,
         embedding: &[f32],
         metadata: serde_json::Value,
-    ) -> anyhow::Result<()>;
+    ) -> Result<(), MemoryError>;
 
     /// Find the `limit` nearest neighbours to `query_embedding`.
     ///
     /// Returns results sorted by descending cosine similarity score.
-    async fn search(&self, query_embedding: &[f32], limit: usize)
-        -> anyhow::Result<Vec<MemoryHit>>;
+    async fn search(
+        &self,
+        query_embedding: &[f32],
+        limit: usize,
+    ) -> Result<Vec<MemoryHit>, MemoryError>;
 
     /// Delete an entry by id.
-    async fn delete(&self, id: &str) -> anyhow::Result<()>;
+    async fn delete(&self, id: &str) -> Result<(), MemoryError>;
 
     /// Return the number of stored embeddings.
-    async fn count(&self) -> anyhow::Result<usize>;
+    async fn count(&self) -> Result<usize, MemoryError>;
 }

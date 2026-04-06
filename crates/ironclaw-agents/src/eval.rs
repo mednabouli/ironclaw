@@ -163,15 +163,10 @@ impl EvalRunner {
         }
         messages.push(Message::user(&case.prompt));
 
-        let req = CompletionRequest {
-            messages,
-            tools: vec![],
-            max_tokens: case.max_tokens.or(Some(1024)),
-            temperature: case.temperature.or(Some(0.0)),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        };
+        let req = CompletionRequest::builder(messages)
+            .max_tokens(case.max_tokens.unwrap_or(1024))
+            .temperature(case.temperature.unwrap_or(0.0))
+            .build();
 
         match self.provider.complete(req).await {
             Ok(resp) => {

@@ -32,6 +32,7 @@ impl OllamaProvider {
                     Role::User => "user",
                     Role::Assistant => "assistant",
                     Role::Tool => "tool",
+                    _ => "user",
                 };
                 if let Some(tr) = &m.tool_result {
                     json!({ "role": role, "content": tr.content.to_string() })
@@ -53,7 +54,8 @@ impl Provider for OllamaProvider {
         true
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+        (async {
         let t0 = Instant::now();
         let model = req.model.as_deref().unwrap_or(&self.model).to_string();
 
@@ -96,11 +98,11 @@ impl Provider for OllamaProvider {
             for tc in arr {
                 let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
                 let args = tc["function"]["arguments"].clone();
-                tool_calls.push(ToolCall {
-                    id: uuid::Uuid::new_v4().to_string(),
+                tool_calls.push(ToolCall::new(
+                    uuid::Uuid::new_v4().to_string(),
                     name,
-                    arguments: args,
-                });
+                    args,
+                ));
             }
         }
 
@@ -115,45 +117,53 @@ impl Provider for OllamaProvider {
         let mut msg = Message::assistant(content);
         msg.tool_calls = tool_calls;
 
-        Ok(CompletionResponse {
-            message: msg,
+        Ok::<_, anyhow::Error>(CompletionResponse::new(
+            msg,
             stop_reason,
-            usage: TokenUsage {
-                prompt_tokens,
-                completion_tokens,
-                total_tokens: prompt_tokens + completion_tokens,
-            },
+            TokenUsage::new(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens),
             model,
-            latency_ms: t0.elapsed().as_millis() as u64,
+            t0.elapsed().as_millis() as u64,
+        ))
+        }).await.map_err(Into::into)
+    }
+
+    async fn stream(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<BoxStream<StreamChunk>, ProviderError> {
+        (async {
+            let model = req.model.as_deref().unwrap_or(&self.model).to_string();
+            let body = json!({
+                "model":    model,
+                "messages": self.messages_to_json(&req.messages),
+                "stream":   true,
+            });
+
+            let response = self
+                .client
+                .post(format!("{}/api/chat", self.base_url))
+                .json(&body)
+                .send()
+                .await
+                .context("Ollama stream error")?
+                .error_for_status()?;
+
+            Ok::<_, anyhow::Error>(crate::sse::parse_ollama_ndjson_stream(response))
         })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
-        let model = req.model.as_deref().unwrap_or(&self.model).to_string();
-        let body = json!({
-            "model":    model,
-            "messages": self.messages_to_json(&req.messages),
-            "stream":   true,
-        });
-
-        let response = self
-            .client
-            .post(format!("{}/api/chat", self.base_url))
-            .json(&body)
-            .send()
-            .await
-            .context("Ollama stream error")?
-            .error_for_status()?;
-
-        Ok(crate::sse::parse_ollama_ndjson_stream(response))
-    }
-
-    async fn health_check(&self) -> anyhow::Result<()> {
-        self.client
-            .get(format!("{}/api/tags", self.base_url))
-            .send()
-            .await?
-            .error_for_status()?;
-        Ok(())
+    async fn health_check(&self) -> Result<(), ProviderError> {
+        (async {
+            self.client
+                .get(format!("{}/api/tags", self.base_url))
+                .send()
+                .await?
+                .error_for_status()?;
+            Ok::<_, anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 }

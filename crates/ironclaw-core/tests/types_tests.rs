@@ -41,7 +41,7 @@ fn completion_request_simple_structure() {
 fn outbound_message_as_str() {
     let m = OutboundMessage::text("s1", "reply here");
     assert_eq!(m.as_str(), "reply here");
-    assert_eq!(m.session_id, "s1");
+    assert_eq!(m.session_id.as_str(), "s1");
 }
 
 #[test]
@@ -78,12 +78,7 @@ fn inbound_message_cli_helper() {
 
 #[test]
 fn tool_call_delta_roundtrips_json() {
-    let d = ToolCallDelta {
-        index: 0,
-        id: Some("call-1".into()),
-        name: Some("shell".into()),
-        arguments_delta: r#"{"cmd":"ls"#.into(),
-    };
+    let d = ToolCallDelta::first(0, "call-1", "shell", r#"{"cmd":"ls"#);
     let j = serde_json::to_string(&d).unwrap();
     let d2: ToolCallDelta = serde_json::from_str(&j).unwrap();
     assert_eq!(d2.index, 0);
@@ -101,17 +96,12 @@ fn stream_chunk_defaults_empty_tool_calls() {
 
 #[test]
 fn stream_chunk_with_tool_calls_roundtrips() {
-    let chunk = StreamChunk {
-        delta: String::new(),
-        done: false,
-        tool_calls: vec![ToolCallDelta {
-            index: 0,
-            id: Some("tc-1".into()),
-            name: Some("search".into()),
-            arguments_delta: "{}".into(),
-        }],
-        stop_reason: None,
-    };
+    let chunk = StreamChunk::new(
+        "",
+        false,
+        vec![ToolCallDelta::first(0, "tc-1", "search", "{}")],
+        None,
+    );
     let j = serde_json::to_string(&chunk).unwrap();
     let chunk2: StreamChunk = serde_json::from_str(&j).unwrap();
     assert_eq!(chunk2.tool_calls.len(), 1);
@@ -142,11 +132,7 @@ fn stream_event_tool_call_start_serde() {
 #[test]
 fn stream_event_done_serde() {
     let evt = StreamEvent::Done {
-        usage: Some(TokenUsage {
-            prompt_tokens: 10,
-            completion_tokens: 5,
-            total_tokens: 15,
-        }),
+        usage: Some(TokenUsage::new(10, 5, 15)),
     };
     let j = serde_json::to_string(&evt).unwrap();
     assert!(j.contains(r#""type":"done""#));

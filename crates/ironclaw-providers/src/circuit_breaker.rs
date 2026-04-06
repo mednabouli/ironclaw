@@ -116,7 +116,7 @@ impl CircuitBreakerProvider {
     }
 
     /// Check if the circuit allows a request. Returns an error if open.
-    fn check_circuit(&self) -> anyhow::Result<()> {
+    fn check_circuit(&self) -> Result<(), ProviderError> {
         match self.state() {
             CircuitState::Closed => Ok(()),
             CircuitState::HalfOpen => {
@@ -126,12 +126,10 @@ impl CircuitBreakerProvider {
                 );
                 Ok(())
             }
-            CircuitState::Open => {
-                anyhow::bail!(
-                    "Circuit breaker open for provider '{}' — rejecting request",
-                    self.inner.name()
-                )
-            }
+            CircuitState::Open => Err(ProviderError::Other(anyhow::anyhow!(
+                "Circuit breaker open for provider '{}' — rejecting request",
+                self.inner.name()
+            ))),
         }
     }
 }
@@ -161,7 +159,7 @@ impl Provider for CircuitBreakerProvider {
         self.inner.supports_vision()
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         self.check_circuit()?;
         match self.inner.complete(req).await {
             Ok(resp) => {
@@ -175,7 +173,10 @@ impl Provider for CircuitBreakerProvider {
         }
     }
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+    async fn stream(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<BoxStream<StreamChunk>, ProviderError> {
         self.check_circuit()?;
         match self.inner.stream(req).await {
             Ok(stream) => {
@@ -189,7 +190,7 @@ impl Provider for CircuitBreakerProvider {
         }
     }
 
-    async fn health_check(&self) -> anyhow::Result<()> {
+    async fn health_check(&self) -> Result<(), ProviderError> {
         // Health checks bypass the circuit breaker — the registry uses them
         // to determine if a provider is available.
         self.inner.health_check().await
@@ -208,13 +209,19 @@ mod tests {
         fn name(&self) -> &'static str {
             "always-fail"
         }
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
-            anyhow::bail!("provider error")
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            Err(ProviderError::Other(anyhow::anyhow!("provider error")))
         }
-        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
-            anyhow::bail!("provider error")
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<BoxStream<StreamChunk>, ProviderError> {
+            Err(ProviderError::Other(anyhow::anyhow!("provider error")))
         }
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> Result<(), ProviderError> {
             Ok(())
         }
     }
@@ -236,20 +243,26 @@ mod tests {
         fn name(&self) -> &'static str {
             "counting"
         }
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
             self.calls.fetch_add(1, Ordering::SeqCst);
-            Ok(CompletionResponse {
-                message: Message::assistant("ok"),
-                stop_reason: StopReason::EndTurn,
-                usage: TokenUsage::default(),
-                model: "test".into(),
-                latency_ms: 0,
-            })
+            Ok(CompletionResponse::new(
+                Message::assistant("ok"),
+                StopReason::EndTurn,
+                TokenUsage::default(),
+                "test",
+                0,
+            ))
         }
-        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<BoxStream<StreamChunk>, ProviderError> {
             Ok(Box::pin(futures::stream::empty()))
         }
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> Result<(), ProviderError> {
             Ok(())
         }
     }

@@ -36,7 +36,7 @@ impl Agent for TimeoutAgent {
         self.inner.role()
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let task_id = task.id;
         let agent_id = self.inner.id().clone();
         let deadline = self.deadline;
@@ -55,14 +55,12 @@ impl Agent for TimeoutAgent {
                     deadline_ms = deadline.as_millis() as u64,
                     "Agent task timed out"
                 );
-                Ok(AgentOutput {
+                Ok(AgentOutput::new(
                     task_id,
                     agent_id,
-                    text: format!("Task timed out after {}ms", deadline.as_millis()),
-                    tool_calls: vec![],
-                    approved: false,
-                    usage: TokenUsage::default(),
-                })
+                    format!("Task timed out after {}ms", deadline.as_millis()),
+                )
+                .with_approved(false))
             }
         }
     }
@@ -84,16 +82,9 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
             tokio::time::sleep(Duration::from_secs(60)).await;
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: "done".into(),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+            Ok(AgentOutput::new(task.id, self.id.clone(), "done").with_approved(true))
         }
     }
 
@@ -109,15 +100,8 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: "fast result".into(),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(AgentOutput::new(task.id, self.id.clone(), "fast result").with_approved(true))
         }
     }
 
@@ -151,7 +135,7 @@ mod tests {
             id: "inner-1".into(),
         });
         let agent = TimeoutAgent::new(fast, Duration::from_secs(5));
-        assert_eq!(agent.id(), "inner-1");
+        assert_eq!(agent.id().as_str(), "inner-1");
         assert!(matches!(agent.role(), AgentRole::Worker));
     }
 }

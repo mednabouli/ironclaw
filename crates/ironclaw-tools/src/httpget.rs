@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use reqwest::Client;
 use serde_json::{json, Value};
 
@@ -57,10 +57,10 @@ impl Tool for HttpGetTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "url": {
@@ -75,64 +75,68 @@ impl Tool for HttpGetTool {
                 },
                 "required": ["url"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let url = params["url"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'url' parameter"))?;
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        (async move {
+            let url = params["url"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'url' parameter"))?;
 
-        // Basic URL validation
-        if !url.starts_with("http://") && !url.starts_with("https://") {
-            anyhow::bail!("URL must start with http:// or https://");
-        }
+            // Basic URL validation
+            if !url.starts_with("http://") && !url.starts_with("https://") {
+                anyhow::bail!("URL must start with http:// or https://");
+            }
 
-        let mut request = self.client.get(url);
+            let mut request = self.client.get(url);
 
-        // Add custom headers
-        if let Some(headers) = params["headers"].as_object() {
-            for (key, value) in headers {
-                if let Some(v) = value.as_str() {
-                    request = request.header(key.as_str(), v);
+            // Add custom headers
+            if let Some(headers) = params["headers"].as_object() {
+                for (key, value) in headers {
+                    if let Some(v) = value.as_str() {
+                        request = request.header(key.as_str(), v);
+                    }
                 }
             }
-        }
 
-        let response = request
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("HTTP request failed: {e}"))?;
+            let response = request
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("HTTP request failed: {e}"))?;
 
-        let status = response.status().as_u16();
-        let content_type = response
-            .headers()
-            .get("content-type")
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("unknown")
-            .to_string();
+            let status = response.status().as_u16();
+            let content_type = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("unknown")
+                .to_string();
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to read response body: {e}"))?;
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to read response body: {e}"))?;
 
-        let truncated = bytes.len() > self.max_bytes;
-        let body_bytes = if truncated {
-            &bytes[..self.max_bytes]
-        } else {
-            &bytes[..]
-        };
-        let body = String::from_utf8_lossy(body_bytes);
+            let truncated = bytes.len() > self.max_bytes;
+            let body_bytes = if truncated {
+                &bytes[..self.max_bytes]
+            } else {
+                &bytes[..]
+            };
+            let body = String::from_utf8_lossy(body_bytes);
 
-        Ok(json!({
-            "url": url,
-            "status": status,
-            "content_type": content_type,
-            "body": body,
-            "size_bytes": bytes.len(),
-            "truncated": truncated,
-        }))
+            Ok(json!({
+                "url": url,
+                "status": status,
+                "content_type": content_type,
+                "body": body,
+                "size_bytes": bytes.len(),
+                "truncated": truncated,
+            }))
+        })
+        .await
+        .map_err(Into::into)
     }
 }
 

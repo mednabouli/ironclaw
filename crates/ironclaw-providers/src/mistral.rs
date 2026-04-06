@@ -1,4 +1,4 @@
-use ironclaw_core::Provider;
+use ironclaw_core::{Provider, ProviderError};
 
 use crate::openai::OpenAIProvider;
 
@@ -38,18 +38,18 @@ impl Provider for MistralProvider {
     async fn complete(
         &self,
         req: ironclaw_core::CompletionRequest,
-    ) -> anyhow::Result<ironclaw_core::CompletionResponse> {
+    ) -> Result<ironclaw_core::CompletionResponse, ProviderError> {
         self.0.complete(req).await
     }
 
     async fn stream(
         &self,
         req: ironclaw_core::CompletionRequest,
-    ) -> anyhow::Result<ironclaw_core::BoxStream<ironclaw_core::StreamChunk>> {
+    ) -> Result<ironclaw_core::BoxStream<ironclaw_core::StreamChunk>, ProviderError> {
         self.0.stream(req).await
     }
 
-    async fn health_check(&self) -> anyhow::Result<()> {
+    async fn health_check(&self) -> Result<(), ProviderError> {
         self.0.health_check().await
     }
 }

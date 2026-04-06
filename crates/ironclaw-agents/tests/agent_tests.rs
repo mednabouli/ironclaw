@@ -49,27 +49,26 @@ mod streaming {
         fn name(&self) -> &'static str {
             "mock"
         }
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
-            anyhow::bail!("not used in stream test")
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            Err(ProviderError::Other(anyhow::anyhow!(
+                "not used in stream test"
+            )))
         }
-        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<BoxStream<StreamChunk>, ProviderError> {
             let chunks: Vec<anyhow::Result<StreamChunk>> = vec![
-                Ok(StreamChunk {
-                    delta: "Hello".into(),
-                    done: false,
-                    tool_calls: vec![],
-                    stop_reason: None,
-                }),
-                Ok(StreamChunk {
-                    delta: " world".into(),
-                    done: true,
-                    tool_calls: vec![],
-                    stop_reason: Some(StopReason::EndTurn),
-                }),
+                Ok(StreamChunk::delta("Hello")),
+                Ok(StreamChunk::delta(" world")),
+                Ok(StreamChunk::done(StopReason::EndTurn)),
             ];
             Ok(Box::pin(futures::stream::iter(chunks)))
         }
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> Result<(), ProviderError> {
             Ok(())
         }
     }
@@ -84,10 +83,18 @@ mod streaming {
         fn name(&self) -> &'static str {
             "mock"
         }
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
-            anyhow::bail!("not used in stream test")
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
+            Err(ProviderError::Other(anyhow::anyhow!(
+                "not used in stream test"
+            )))
         }
-        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<BoxStream<StreamChunk>, ProviderError> {
             let n = self
                 .call_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -95,42 +102,37 @@ mod streaming {
             if n == 0 {
                 // First call: emit tool call deltas
                 let chunks: Vec<anyhow::Result<StreamChunk>> = vec![
-                    Ok(StreamChunk {
-                        delta: String::new(),
-                        done: false,
-                        tool_calls: vec![ToolCallDelta {
-                            index: 0,
-                            id: Some("call_1".into()),
-                            name: Some("get_datetime".into()),
-                            arguments_delta: r#"{"timezone""#.into(),
-                        }],
-                        stop_reason: None,
-                    }),
-                    Ok(StreamChunk {
-                        delta: String::new(),
-                        done: true,
-                        tool_calls: vec![ToolCallDelta {
-                            index: 0,
-                            id: None,
-                            name: None,
-                            arguments_delta: r#": "UTC"}"#.into(),
-                        }],
-                        stop_reason: Some(StopReason::ToolUse),
-                    }),
+                    Ok(StreamChunk::new(
+                        "",
+                        false,
+                        vec![ToolCallDelta::first(
+                            0,
+                            "call_1",
+                            "get_datetime",
+                            r#"{"timezone""#,
+                        )],
+                        None,
+                    )),
+                    Ok(StreamChunk::new(
+                        "",
+                        true,
+                        vec![ToolCallDelta::new(0, r#": "UTC"}"#)],
+                        Some(StopReason::ToolUse),
+                    )),
                 ];
                 Ok(Box::pin(futures::stream::iter(chunks)))
             } else {
                 // Second call: final text answer after tool result
-                let chunks: Vec<anyhow::Result<StreamChunk>> = vec![Ok(StreamChunk {
-                    delta: "The time is now.".into(),
-                    done: true,
-                    tool_calls: vec![],
-                    stop_reason: Some(StopReason::EndTurn),
-                })];
+                let chunks: Vec<anyhow::Result<StreamChunk>> = vec![Ok(StreamChunk::new(
+                    "The time is now.",
+                    true,
+                    vec![],
+                    Some(StopReason::EndTurn),
+                ))];
                 Ok(Box::pin(futures::stream::iter(chunks)))
             }
         }
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> Result<(), ProviderError> {
             Ok(())
         }
     }
