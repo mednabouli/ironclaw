@@ -79,29 +79,53 @@ fn pseudo_random_fraction(attempt: u32) -> f64 {
 
 /// Check if an error indicates a transient/retriable failure.
 fn is_transient(err: &ProviderError) -> bool {
-    let msg = err.to_string().to_lowercase();
-    // HTTP status codes that are retriable
-    if msg.contains("429")
-        || msg.contains("500")
-        || msg.contains("502")
-        || msg.contains("503")
-        || msg.contains("504")
-        || msg.contains("rate limit")
-        || msg.contains("too many requests")
-    {
-        return true;
+    match err {
+        // Rate limiting is always transient
+        ProviderError::RateLimit { .. } => true,
+        // Stream drops are transient
+        ProviderError::StreamTerminated => true,
+        // Auth failures are NEVER transient
+        ProviderError::Auth(_) => false,
+        // Model not found is NEVER transient
+        ProviderError::ModelNotFound(_) => false,
+        // Invalid responses are not transient (same input → same parse failure)
+        ProviderError::InvalidResponse(_) => false,
+        // Request errors: check for transient HTTP status codes or network issues
+        ProviderError::Request(msg) => {
+            let msg = msg.to_lowercase();
+            msg.contains("503")
+                || msg.contains("502")
+                || msg.contains("504")
+                || msg.contains("connection")
+                || msg.contains("timeout")
+                || msg.contains("timed out")
+                || msg.contains("reset by peer")
+                || msg.contains("broken pipe")
+                || msg.contains("dns")
+        }
+        // Other errors: fall back to string matching for transient indicators
+        ProviderError::Other(e) => {
+            let msg = format!("{e:#}").to_lowercase();
+            // 5xx status codes and network errors are transient
+            (msg.contains("500")
+                || msg.contains("502")
+                || msg.contains("503")
+                || msg.contains("504")
+                || msg.contains("connection")
+                || msg.contains("timeout")
+                || msg.contains("timed out")
+                || msg.contains("reset by peer")
+                || msg.contains("broken pipe")
+                || msg.contains("dns"))
+                // But 4xx client errors are NOT transient
+                && !msg.contains("401")
+                && !msg.contains("403")
+                && !msg.contains("404")
+                && !msg.contains("422")
+        }
+        // Future variants: assume not transient (safe default)
+        _ => false,
     }
-    // Connection/network errors
-    if msg.contains("connection")
-        || msg.contains("timeout")
-        || msg.contains("timed out")
-        || msg.contains("reset by peer")
-        || msg.contains("broken pipe")
-        || msg.contains("dns")
-    {
-        return true;
-    }
-    false
 }
 
 #[async_trait]

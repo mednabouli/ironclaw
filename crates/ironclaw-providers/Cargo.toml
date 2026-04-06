@@ -42,6 +42,7 @@ uuid         = { workspace = true }
 
 [dev-dependencies]
 mockito      = "1"
+serial_test  = "3"
 tokio        = { workspace = true }
 criterion    = { workspace = true }
 futures      = { workspace = true }

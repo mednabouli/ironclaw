@@ -662,10 +662,12 @@ mod compat {
 mod retry {
     use super::*;
     use ironclaw_providers::{RetryConfig, RetryProvider};
+    use serial_test::serial;
     use std::sync::Arc;
 
     #[cfg(feature = "openai")]
     #[tokio::test]
+    #[serial]
     async fn retries_on_transient_then_succeeds() {
         // Simulate: first request → 503, second request → 200
         let mut server = mockito::Server::new_async().await;
@@ -702,6 +704,7 @@ mod retry {
 
     #[cfg(feature = "openai")]
     #[tokio::test]
+    #[serial]
     async fn does_not_retry_on_auth_failure() {
         let mut server = mockito::Server::new_async().await;
 
