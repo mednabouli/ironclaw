@@ -296,14 +296,52 @@ pub enum AgentRole {
     Planner,
 }
 
+/// State machine for agent lifecycle tracking.
+///
+/// Transitions: `Idle → Running → Waiting → Running → Done | Failed`
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AgentState {
+    /// Agent is idle, waiting for a task.
+    Idle,
+    /// Agent is actively processing a task.
+    Running,
+    /// Agent is waiting on an external resource (tool call, sub-agent, etc.).
+    Waiting,
+    /// Agent completed the task successfully.
+    Done,
+    /// Agent failed with an error message.
+    Failed(String),
+}
+
+impl Default for AgentState {
+    fn default() -> Self {
+        Self::Idle
+    }
+}
+
+impl std::fmt::Display for AgentState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Idle => write!(f, "Idle"),
+            Self::Running => write!(f, "Running"),
+            Self::Waiting => write!(f, "Waiting"),
+            Self::Done => write!(f, "Done"),
+            Self::Failed(msg) => write!(f, "Failed: {msg}"),
+        }
+    }
+}
+
 // ── Channel / Message types ───────────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "id")]
 pub enum ChannelId {
     Telegram(i64),
     Discord(String),
+    Slack(String),
     Rest(String),
     WebSocket(String),
+    Webhook(String),
+    Matrix(String),
     Cli,
     Custom(String),
 }

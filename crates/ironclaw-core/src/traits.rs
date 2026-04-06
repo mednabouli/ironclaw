@@ -113,3 +113,34 @@ pub trait AgentBus: Send + Sync + 'static {
     fn register(&self, agent: Arc<dyn Agent>);
     async fn dispatch(&self, id: &AgentId, task: AgentTask) -> anyhow::Result<AgentOutput>;
 }
+
+// ── VectorStore (RAG) ─────────────────────────────────────────────────────
+/// Trait for storing and retrieving text embeddings for RAG (Retrieval-Augmented
+/// Generation). Implementations receive pre-computed embedding vectors and
+/// perform nearest-neighbour search using cosine similarity.
+#[async_trait]
+pub trait VectorStore: Send + Sync + 'static {
+    /// Store a text chunk and its embedding vector.
+    ///
+    /// `id` is a caller-chosen unique identifier. If the id already exists
+    /// the entry is replaced.
+    async fn upsert(
+        &self,
+        id: &str,
+        text: &str,
+        embedding: &[f32],
+        metadata: serde_json::Value,
+    ) -> anyhow::Result<()>;
+
+    /// Find the `limit` nearest neighbours to `query_embedding`.
+    ///
+    /// Returns results sorted by descending cosine similarity score.
+    async fn search(&self, query_embedding: &[f32], limit: usize)
+        -> anyhow::Result<Vec<MemoryHit>>;
+
+    /// Delete an entry by id.
+    async fn delete(&self, id: &str) -> anyhow::Result<()>;
+
+    /// Return the number of stored embeddings.
+    async fn count(&self) -> anyhow::Result<usize>;
+}

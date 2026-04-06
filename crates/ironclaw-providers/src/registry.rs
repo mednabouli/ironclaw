@@ -90,6 +90,50 @@ impl ProviderRegistry {
             let c = &cfg.providers.groq;
             reg.register(Arc::new(crate::GroqProvider::new(&c.api_key, &c.model)));
         }
+        #[cfg(feature = "openrouter")]
+        if !cfg.providers.openrouter.api_key.is_empty() {
+            let c = &cfg.providers.openrouter;
+            reg.register(Arc::new(crate::OpenRouterProvider::new(
+                &c.api_key, &c.model,
+            )));
+        }
+        // Register generic OpenAI-compatible providers from [providers.extra.*]
+        for (name, c) in &cfg.providers.extra {
+            if !c.api_key.is_empty() {
+                reg.register(Arc::new(crate::compat::CompatProvider::new(
+                    name,
+                    &c.api_key,
+                    &c.model,
+                    &c.base_url,
+                )));
+            }
+        }
+
+        // Wrap all registered providers with retry middleware if enabled
+        let retry_cfg = &cfg.providers.retry;
+        if retry_cfg.enabled && retry_cfg.max_retries > 0 {
+            let rc = crate::retry::RetryConfig {
+                max_retries: retry_cfg.max_retries,
+                base_delay_ms: retry_cfg.base_delay_ms,
+                max_delay_ms: retry_cfg.max_delay_ms,
+            };
+            let wrapped: HashMap<String, Arc<dyn Provider>> = reg
+                .providers
+                .drain()
+                .map(|(name, provider)| {
+                    let retry = Arc::new(crate::retry::RetryProvider::new(provider, rc.clone()))
+                        as Arc<dyn Provider>;
+                    (name, retry)
+                })
+                .collect();
+            reg.providers = wrapped;
+            info!(
+                max_retries = retry_cfg.max_retries,
+                base_delay_ms = retry_cfg.base_delay_ms,
+                "Retry middleware enabled for all providers"
+            );
+        }
+
         reg
     }
 }

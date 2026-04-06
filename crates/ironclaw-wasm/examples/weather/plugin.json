@@ -1,0 +1,26 @@
+{
+    "name": "weather",
+    "version": "0.1.0",
+    "description": "Get current weather for a city via wttr.in. Returns temperature, conditions, humidity, and wind.",
+    "author": "IronClaw Contributors",
+    "license": "MIT",
+    "capabilities": ["http"],
+    "allowed_urls": ["https://wttr.in/"],
+    "allowed_env_vars": [],
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "city": {
+                "type": "string",
+                "description": "City name (e.g. London, Tokyo, New York)"
+            },
+            "units": {
+                "type": "string",
+                "enum": ["metric", "imperial"],
+                "description": "Temperature units (default: metric)",
+                "default": "metric"
+            }
+        },
+        "required": ["city"]
+    }
+}

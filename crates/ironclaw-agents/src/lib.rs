@@ -1,9 +1,21 @@
 pub mod bus;
 pub mod context;
+pub mod cot;
+pub mod critic;
 pub mod handler;
+pub mod planner;
 pub mod react;
+pub mod router;
+pub mod swarm;
+pub mod timeout;
 
 pub use bus::LocalBus;
 pub use context::AgentContext;
+pub use cot::ChainOfThoughtAgent;
+pub use critic::CriticActorPair;
 pub use handler::AgentHandler;
+pub use planner::PlannerAgent;
 pub use react::ReActAgent;
+pub use router::RouterAgent;
+pub use swarm::{SwarmEngine, SwarmNode};
+pub use timeout::TimeoutAgent;

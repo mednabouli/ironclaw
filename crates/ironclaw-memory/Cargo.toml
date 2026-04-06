@@ -16,5 +16,6 @@ anyhow       = { workspace = true }
 tracing      = { workspace = true }
 dashmap      = { workspace = true }
 sqlx         = { workspace = true }
+redis        = { workspace = true }
 uuid         = { workspace = true }
 chrono       = { workspace = true }

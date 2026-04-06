@@ -73,10 +73,12 @@ impl Default for AgentConfig {
 pub struct ProvidersConfig {
     pub primary: String,
     pub fallback: Vec<String>,
+    pub retry: ProviderRetryConfig,
     pub ollama: OllamaConfig,
     pub claude: AnthropicConfig,
     pub openai: OpenAIConfig,
     pub groq: GroqConfig,
+    pub openrouter: OpenRouterConfig,
     pub extra: HashMap<String, ExtraProviderConfig>,
 }
 impl Default for ProvidersConfig {
@@ -84,11 +86,37 @@ impl Default for ProvidersConfig {
         Self {
             primary: "ollama".into(),
             fallback: vec![],
+            retry: Default::default(),
             ollama: Default::default(),
             claude: Default::default(),
             openai: Default::default(),
             groq: Default::default(),
+            openrouter: Default::default(),
             extra: HashMap::new(),
+        }
+    }
+}
+
+/// Retry configuration for provider API calls.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProviderRetryConfig {
+    /// Whether retry is enabled.
+    pub enabled: bool,
+    /// Maximum number of retry attempts.
+    pub max_retries: u32,
+    /// Base delay between retries in milliseconds.
+    pub base_delay_ms: u64,
+    /// Maximum delay cap in milliseconds.
+    pub max_delay_ms: u64,
+}
+impl Default for ProviderRetryConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            max_retries: 3,
+            base_delay_ms: 500,
+            max_delay_ms: 30_000,
         }
     }
 }
@@ -158,6 +186,21 @@ impl Default for GroqConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct OpenRouterConfig {
+    pub api_key: String,
+    pub model: String,
+}
+impl Default for OpenRouterConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "openai/gpt-4o".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtraProviderConfig {
     pub base_url: String,
     pub api_key: String,
@@ -168,17 +211,51 @@ pub struct ExtraProviderConfig {
 #[serde(default)]
 pub struct ChannelsConfig {
     pub enabled: Vec<String>,
+    pub rate_limit: RateLimitConfigToml,
     pub telegram: TelegramConfig,
     pub rest: RestConfig,
     pub discord: DiscordConfig,
+    pub slack: SlackConfig,
+    pub websocket: WebSocketConfig,
+    pub webhook: WebhookConfig,
+    pub matrix: MatrixConfig,
 }
 impl Default for ChannelsConfig {
     fn default() -> Self {
         Self {
             enabled: vec!["cli".into()],
+            rate_limit: Default::default(),
             telegram: Default::default(),
             rest: Default::default(),
             discord: Default::default(),
+            slack: Default::default(),
+            websocket: Default::default(),
+            webhook: Default::default(),
+            matrix: Default::default(),
+        }
+    }
+}
+
+/// Per-user rate-limit configuration (token bucket).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RateLimitConfigToml {
+    /// Whether rate limiting is enabled.
+    pub enabled: bool,
+    /// Maximum burst size (tokens in a full bucket).
+    pub capacity: u32,
+    /// Tokens added per refill interval.
+    pub refill_tokens: u32,
+    /// Refill interval in seconds.
+    pub refill_interval_secs: u64,
+}
+impl Default for RateLimitConfigToml {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            capacity: 20,
+            refill_tokens: 1,
+            refill_interval_secs: 3,
         }
     }
 }
@@ -210,12 +287,81 @@ pub struct DiscordConfig {
     pub token: String,
 }
 
+/// Slack Events API channel configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SlackConfig {
+    pub bot_token: String,
+    pub signing_secret: String,
+    pub host: String,
+    pub port: u16,
+}
+impl Default for SlackConfig {
+    fn default() -> Self {
+        Self {
+            bot_token: String::new(),
+            signing_secret: String::new(),
+            host: "127.0.0.1".into(),
+            port: 3000,
+        }
+    }
+}
+
+/// WebSocket channel configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WebSocketConfig {
+    pub host: String,
+    pub port: u16,
+    pub auth_token: String,
+}
+impl Default for WebSocketConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".into(),
+            port: 8081,
+            auth_token: String::new(),
+        }
+    }
+}
+
+/// Generic inbound webhook channel configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WebhookConfig {
+    pub host: String,
+    pub port: u16,
+    pub path: String,
+    pub auth_token: String,
+}
+impl Default for WebhookConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".into(),
+            port: 9000,
+            path: "/webhook".into(),
+            auth_token: String::new(),
+        }
+    }
+}
+
+/// Matrix channel configuration.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MatrixConfig {
+    pub homeserver_url: String,
+    pub access_token: String,
+    pub user_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MemoryConfig {
     pub backend: String,
     pub max_history: usize,
     pub path: String,
+    pub redis: RedisConfig,
+    /// Dimensions for stored embedding vectors (must match your embedding model).
+    pub embedding_dimensions: usize,
 }
 impl Default for MemoryConfig {
     fn default() -> Self {
@@ -223,6 +369,29 @@ impl Default for MemoryConfig {
             backend: "memory".into(),
             max_history: 50,
             path: "~/.ironclaw/memory.db".into(),
+            redis: Default::default(),
+            embedding_dimensions: 384,
+        }
+    }
+}
+
+/// Redis backend configuration for distributed memory.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RedisConfig {
+    /// Redis connection URL (e.g. `redis://127.0.0.1:6379`).
+    pub url: String,
+    /// Key prefix for all IronClaw keys, to avoid collisions.
+    pub key_prefix: String,
+    /// Maximum number of messages per session before trimming.
+    pub max_history: usize,
+}
+impl Default for RedisConfig {
+    fn default() -> Self {
+        Self {
+            url: "redis://127.0.0.1:6379".into(),
+            key_prefix: "ironclaw:".into(),
+            max_history: 50,
         }
     }
 }
@@ -232,12 +401,15 @@ impl Default for MemoryConfig {
 pub struct ToolsConfig {
     pub enabled: Vec<String>,
     pub shell: ShellToolConfig,
+    /// Directories that FileReadTool and FileWriteTool are allowed to access.
+    pub file_allowed_dirs: Vec<String>,
 }
 impl Default for ToolsConfig {
     fn default() -> Self {
         Self {
             enabled: vec!["datetime".into()],
             shell: Default::default(),
+            file_allowed_dirs: vec![],
         }
     }
 }

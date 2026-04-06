@@ -1,0 +1,58 @@
+{
+    "version": "1",
+    "base_url": "https://plugins.ironclaw.dev",
+    "plugins": [
+        {
+            "name": "weather",
+            "version": "0.1.0",
+            "description": "Get current weather for a city using wttr.in",
+            "author": "IronClaw Contributors",
+            "license": "MIT",
+            "capabilities": ["http"],
+            "allowed_urls": ["https://wttr.in/"],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "city": {
+                        "type": "string",
+                        "description": "City name (e.g. London, Tokyo)"
+                    },
+                    "units": {
+                        "type": "string",
+                        "description": "Temperature units: metric or imperial",
+                        "default": "metric"
+                    }
+                },
+                "required": ["city"]
+            },
+            "download_url": "https://plugins.ironclaw.dev/weather/0.1.0/weather.wasm",
+            "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+            "name": "crypto-price",
+            "version": "0.1.0",
+            "description": "Get cryptocurrency prices from CoinGecko",
+            "author": "IronClaw Contributors",
+            "license": "MIT",
+            "capabilities": ["http"],
+            "allowed_urls": ["https://api.coingecko.com/"],
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "coin": {
+                        "type": "string",
+                        "description": "Coin ID e.g. bitcoin, ethereum, solana"
+                    },
+                    "currency": {
+                        "type": "string",
+                        "description": "Fiat currency code e.g. usd, eur, gbp",
+                        "default": "usd"
+                    }
+                },
+                "required": ["coin"]
+            },
+            "download_url": "https://plugins.ironclaw.dev/crypto-price/0.1.0/crypto-price.wasm",
+            "sha256": null
+        }
+    ]
+}

@@ -1,4 +1,6 @@
+pub mod compat;
 pub mod registry;
+pub mod retry;
 pub mod sse;
 
 #[cfg(feature = "ollama")]
@@ -20,4 +22,11 @@ pub use openai::OpenAIProvider;
 pub mod groq;
 #[cfg(feature = "groq")]
 pub use groq::GroqProvider;
+
+#[cfg(feature = "openrouter")]
+pub mod openrouter;
+#[cfg(feature = "openrouter")]
+pub use openrouter::OpenRouterProvider;
+
 pub use registry::ProviderRegistry;
+pub use retry::{RetryConfig, RetryProvider};

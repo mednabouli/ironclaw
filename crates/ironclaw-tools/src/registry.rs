@@ -48,6 +48,24 @@ impl ToolRegistry {
                     cfg.tools.shell.allowlist.clone(),
                     cfg.tools.shell.timeout_secs,
                 ))),
+                "calculator" => reg.register(Arc::new(crate::calculator::CalculatorTool)),
+                "web_search" => reg.register(Arc::new(crate::websearch::WebSearchTool::new())),
+                "file_read" => reg.register(Arc::new(crate::fileread::FileReadTool::new(
+                    cfg.tools
+                        .file_allowed_dirs
+                        .iter()
+                        .map(std::path::PathBuf::from)
+                        .collect(),
+                ))),
+                "file_write" => reg.register(Arc::new(crate::filewrite::FileWriteTool::new(
+                    cfg.tools
+                        .file_allowed_dirs
+                        .iter()
+                        .map(std::path::PathBuf::from)
+                        .collect(),
+                ))),
+                "http_get" => reg.register(Arc::new(crate::httpget::HttpGetTool::new())),
+                "cron" => reg.register(Arc::new(crate::cron::CronTool::new())),
                 other => tracing::warn!("Unknown tool in config: {other}"),
             }
         }

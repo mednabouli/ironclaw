@@ -67,6 +67,29 @@ enum Commands {
         /// The session ID to clear
         session_id: String,
     },
+
+    /// Manage WASM plugins
+    Plugin {
+        #[command(subcommand)]
+        action: PluginAction,
+    },
+}
+
+/// Plugin management subcommands.
+#[derive(Subcommand)]
+enum PluginAction {
+    /// Install a plugin from a URL
+    Install {
+        /// URL to the .wasm file
+        url: String,
+    },
+    /// List installed plugins
+    List,
+    /// Show details of an installed plugin
+    Info {
+        /// Plugin name
+        name: String,
+    },
 }
 
 #[tokio::main]
@@ -106,6 +129,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Sessions => cmd_sessions(cfg).await?,
         Commands::Search { query, limit } => cmd_search(cfg, query, limit).await?,
         Commands::ClearSession { session_id } => cmd_clear_session(cfg, session_id).await?,
+        Commands::Plugin { action } => cmd_plugin(action).await?,
     }
 
     Ok(())
@@ -286,5 +310,70 @@ async fn cmd_clear_session(cfg: IronClawConfig, session_id: String) -> anyhow::R
     let memory = ironclaw_memory::from_config(&cfg).await?;
     memory.clear(&session_id).await?;
     println!("Cleared session '{session_id}'.");
+    Ok(())
+}
+
+// ── plugin ────────────────────────────────────────────────────────────────
+async fn cmd_plugin(action: PluginAction) -> anyhow::Result<()> {
+    let plugin_dir = ironclaw_wasm::installer::default_plugin_dir();
+
+    match action {
+        PluginAction::Install { url } => {
+            println!("📦 Installing plugin from {url}");
+            let result =
+                ironclaw_wasm::installer::install_from_url(&url, &plugin_dir, None).await?;
+            println!(
+                "  ✅ Installed '{}' → {}",
+                result.name,
+                result.wasm_path.display()
+            );
+        }
+        PluginAction::List => {
+            let plugins = ironclaw_wasm::installer::list_installed(&plugin_dir);
+            if plugins.is_empty() {
+                println!("No plugins installed. Install one with: ironclaw plugin install <url>");
+            } else {
+                println!("🔌 Installed plugins ({}):", plugins.len());
+                for p in &plugins {
+                    let caps = p
+                        .capabilities
+                        .iter()
+                        .map(|c| c.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    println!(
+                        "  • {} v{} — {} [{}]",
+                        p.name, p.version, p.description, caps
+                    );
+                }
+            }
+        }
+        PluginAction::Info { name } => {
+            let manifest_path = plugin_dir.join(&name).join("plugin.json");
+            if !manifest_path.exists() {
+                anyhow::bail!("Plugin '{name}' not found in {}", plugin_dir.display());
+            }
+            let manifest = ironclaw_wasm::manifest::PluginManifest::from_file(&manifest_path)?;
+            println!("🔌 Plugin: {}", manifest.name);
+            println!("   Version:     {}", manifest.version);
+            println!("   Description: {}", manifest.description);
+            println!("   Author:      {}", manifest.author);
+            println!("   License:     {}", manifest.license);
+            let caps = manifest
+                .capabilities
+                .iter()
+                .map(|c| c.to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            println!("   Capabilities: [{}]", caps);
+            if !manifest.allowed_urls.is_empty() {
+                println!("   Allowed URLs: {}", manifest.allowed_urls.join(", "));
+            }
+            if !manifest.allowed_env_vars.is_empty() {
+                println!("   Allowed Env:  {}", manifest.allowed_env_vars.join(", "));
+            }
+        }
+    }
+
     Ok(())
 }

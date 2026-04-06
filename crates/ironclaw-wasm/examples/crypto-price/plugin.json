@@ -1,0 +1,25 @@
+{
+    "name": "crypto-price",
+    "version": "0.1.0",
+    "description": "Get current cryptocurrency prices from CoinGecko. Returns price in USD, EUR, or other fiat currencies.",
+    "author": "IronClaw Contributors",
+    "license": "MIT",
+    "capabilities": ["http"],
+    "allowed_urls": ["https://api.coingecko.com/"],
+    "allowed_env_vars": [],
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "coin": {
+                "type": "string",
+                "description": "Cryptocurrency ID (e.g. bitcoin, ethereum, solana)"
+            },
+            "currency": {
+                "type": "string",
+                "description": "Fiat currency code (default: usd)",
+                "default": "usd"
+            }
+        },
+        "required": ["coin"]
+    }
+}

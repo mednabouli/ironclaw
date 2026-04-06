@@ -1,3 +1,6 @@
+pub mod middleware;
+pub mod ratelimit;
+
 #[cfg(feature = "rest")]
 pub mod rest;
 #[cfg(feature = "rest")]
@@ -7,6 +10,36 @@ pub use rest::RestChannel;
 pub mod cli;
 #[cfg(feature = "cli")]
 pub use cli::CliChannel;
+
+#[cfg(feature = "telegram")]
+pub mod telegram;
+#[cfg(feature = "telegram")]
+pub use telegram::TelegramChannel;
+
+#[cfg(feature = "discord")]
+pub mod discord;
+#[cfg(feature = "discord")]
+pub use discord::DiscordChannel;
+
+#[cfg(feature = "slack")]
+pub mod slack;
+#[cfg(feature = "slack")]
+pub use slack::SlackChannel;
+
+#[cfg(feature = "websocket")]
+pub mod websocket;
+#[cfg(feature = "websocket")]
+pub use websocket::WebSocketChannel;
+
+#[cfg(feature = "webhook")]
+pub mod webhook;
+#[cfg(feature = "webhook")]
+pub use webhook::WebhookChannel;
+
+#[cfg(feature = "matrix")]
+pub mod matrix;
+#[cfg(feature = "matrix")]
+pub use matrix::MatrixChannel;
 
 #[cfg(test)]
 pub(crate) mod tests {

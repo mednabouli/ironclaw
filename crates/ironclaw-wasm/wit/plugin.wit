@@ -1,0 +1,80 @@
+// IronClaw WASM Plugin Interface — WIT (WebAssembly Interface Types)
+//
+// This defines the contract between the IronClaw host and WASM plugin tools.
+// Plugins implement the `ironclaw:plugin/tool` world.
+//
+// To build a plugin:
+//   1. Implement the `tool` interface exports
+//   2. Use the `host` interface imports for capabilities (http, fs, env)
+//   3. Compile to a WASM Component with `cargo component build --release`
+//
+// Capability model:
+//   Plugins declare required capabilities in their manifest.
+//   The host only links imports the plugin is allowed to use.
+//   Undeclared capabilities result in a trap at runtime.
+
+package ironclaw:plugin@0.1.0;
+
+/// Host-provided capabilities that plugins can import.
+interface host {
+    /// Make an outbound HTTP request (requires "http" capability).
+    record http-request {
+        method: string,
+        url: string,
+        headers: list<tuple<string, string>>,
+        body: option<string>,
+    }
+
+    record http-response {
+        status: u16,
+        headers: list<tuple<string, string>>,
+        body: string,
+    }
+
+    /// Perform an HTTP request. Traps if "http" capability not granted.
+    http-fetch: func(req: http-request) -> result<http-response, string>;
+
+    /// Read a file from the sandbox directory (requires "filesystem" capability).
+    /// Path is relative to the plugin sandbox root.
+    fs-read: func(path: string) -> result<string, string>;
+
+    /// Write a file to the sandbox directory (requires "filesystem" capability).
+    fs-write: func(path: string, content: string) -> result<_, string>;
+
+    /// List files in a directory (requires "filesystem" capability).
+    fs-list: func(path: string) -> result<list<string>, string>;
+
+    /// Get an environment variable (requires "env" capability).
+    /// Only variables explicitly allowlisted in the plugin config are accessible.
+    env-get: func(name: string) -> option<string>;
+
+    /// Log a message at the given level. Always available (no capability needed).
+    /// Levels: "trace", "debug", "info", "warn", "error"
+    log: func(level: string, message: string);
+}
+
+/// The interface that every IronClaw plugin tool must implement.
+interface tool {
+    /// A JSON Schema describing the tool's parameters.
+    record tool-schema {
+        /// Unique tool name (must match the plugin filename without .wasm).
+        name: string,
+        /// Human-readable description shown to the LLM.
+        description: string,
+        /// JSON Schema string for parameters.
+        parameters-json: string,
+    }
+
+    /// Return the tool's schema. Called once at registration time.
+    get-schema: func() -> tool-schema;
+
+    /// Invoke the tool with JSON-encoded parameters.
+    /// Returns JSON-encoded result.
+    invoke: func(params-json: string) -> result<string, string>;
+}
+
+/// The world that IronClaw plugin modules target.
+world plugin {
+    import host;
+    export tool;
+}
