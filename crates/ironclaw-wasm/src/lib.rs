@@ -1,7 +1,7 @@
 //! WASM Plugin sandbox — Phase 6 (wasmtime Component Model)
 //!
 //! Provides the plugin system for IronClaw:
-//! - WIT interface definition for the Component Model ([`wit/plugin.wit`])
+//! - WIT interface definition for the Component Model (`wit/plugin.wit`)
 //! - Capability-based sandboxing ([`capability`])
 //! - Plugin manifest and registry ([`manifest`])
 //! - Plugin installer ([`installer`])
