@@ -1,17 +1,20 @@
-
-use ironclaw_core::Provider;
 use std::{collections::HashMap, sync::Arc};
-use tracing::{info, warn};
+
 use ironclaw_config::IronClawConfig;
+use ironclaw_core::Provider;
+use tracing::{info, warn};
 
 pub struct ProviderRegistry {
-    providers:      HashMap<String, Arc<dyn Provider>>,
+    providers: HashMap<String, Arc<dyn Provider>>,
     fallback_chain: Vec<String>,
 }
 
 impl ProviderRegistry {
     pub fn new() -> Self {
-        Self { providers: HashMap::new(), fallback_chain: vec![] }
+        Self {
+            providers: HashMap::new(),
+            fallback_chain: vec![],
+        }
     }
 
     pub fn register(&mut self, provider: Arc<dyn Provider>) {
@@ -29,8 +32,13 @@ impl ProviderRegistry {
         for name in &self.fallback_chain {
             if let Some(p) = self.providers.get(name) {
                 match p.health_check().await {
-                    Ok(_)  => { info!("Using provider: {name}"); return Ok(Arc::clone(p)); }
-                    Err(e) => { warn!("Provider '{name}' unhealthy: {e}"); }
+                    Ok(_) => {
+                        info!("Using provider: {name}");
+                        return Ok(Arc::clone(p));
+                    }
+                    Err(e) => {
+                        warn!("Provider '{name}' unhealthy: {e}");
+                    }
                 }
             }
         }
@@ -62,12 +70,20 @@ impl ProviderRegistry {
         #[cfg(feature = "anthropic")]
         if !cfg.providers.claude.api_key.is_empty() {
             let c = &cfg.providers.claude;
-            reg.register(Arc::new(crate::AnthropicProvider::new(&c.api_key, &c.model, &c.base_url)));
+            reg.register(Arc::new(crate::AnthropicProvider::new(
+                &c.api_key,
+                &c.model,
+                &c.base_url,
+            )));
         }
         #[cfg(feature = "openai")]
         if !cfg.providers.openai.api_key.is_empty() {
             let c = &cfg.providers.openai;
-            reg.register(Arc::new(crate::OpenAIProvider::new(&c.api_key, &c.model, &c.base_url)));
+            reg.register(Arc::new(crate::OpenAIProvider::new(
+                &c.api_key,
+                &c.model,
+                &c.base_url,
+            )));
         }
         #[cfg(feature = "groq")]
         if !cfg.providers.groq.api_key.is_empty() {
@@ -79,5 +95,7 @@ impl ProviderRegistry {
 }
 
 impl Default for ProviderRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

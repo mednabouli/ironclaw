@@ -1,4 +1,3 @@
-
 #[cfg(feature = "rest")]
 pub mod rest;
 #[cfg(feature = "rest")]

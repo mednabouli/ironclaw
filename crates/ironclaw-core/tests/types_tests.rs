@@ -1,8 +1,17 @@
 use ironclaw_core::*;
 
-#[test] fn message_user_role()      { assert_eq!(Message::user("hi").role, Role::User); }
-#[test] fn message_system_role()    { assert_eq!(Message::system("s").role, Role::System); }
-#[test] fn message_assistant_role() { assert_eq!(Message::assistant("a").role, Role::Assistant); }
+#[test]
+fn message_user_role() {
+    assert_eq!(Message::user("hi").role, Role::User);
+}
+#[test]
+fn message_system_role() {
+    assert_eq!(Message::system("s").role, Role::System);
+}
+#[test]
+fn message_assistant_role() {
+    assert_eq!(Message::assistant("a").role, Role::Assistant);
+}
 
 #[test]
 fn message_tool_result_has_call_id() {
@@ -13,8 +22,8 @@ fn message_tool_result_has_call_id() {
 
 #[test]
 fn message_roundtrips_json() {
-    let m  = Message::assistant("hello world");
-    let j  = serde_json::to_string(&m).unwrap();
+    let m = Message::assistant("hello world");
+    let j = serde_json::to_string(&m).unwrap();
     let m2: Message = serde_json::from_str(&j).unwrap();
     assert_eq!(m.content, m2.content);
 }
@@ -37,11 +46,20 @@ fn outbound_message_as_str() {
 
 #[test]
 fn stop_reason_serde() {
-    assert_eq!(serde_json::to_string(&StopReason::EndTurn).unwrap(), r#""end_turn""#);
-    assert_eq!(serde_json::to_string(&StopReason::ToolUse).unwrap(), r#""tool_use""#);
+    assert_eq!(
+        serde_json::to_string(&StopReason::EndTurn).unwrap(),
+        r#""end_turn""#
+    );
+    assert_eq!(
+        serde_json::to_string(&StopReason::ToolUse).unwrap(),
+        r#""tool_use""#
+    );
 }
 
-#[test] fn token_usage_default_zero() { assert_eq!(TokenUsage::default().total_tokens, 0); }
+#[test]
+fn token_usage_default_zero() {
+    assert_eq!(TokenUsage::default().total_tokens, 0);
+}
 
 #[test]
 fn agent_task_new_empty_context() {

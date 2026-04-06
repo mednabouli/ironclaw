@@ -1,6 +1,7 @@
-use ironclaw_tools::{ToolRegistry, datetime::DateTimeTool, shell::ShellTool};
-use ironclaw_core::Tool;
 use std::sync::Arc;
+
+use ironclaw_core::Tool;
+use ironclaw_tools::{datetime::DateTimeTool, shell::ShellTool, ToolRegistry};
 
 #[test]
 fn datetime_tool_schema_name() {
@@ -12,7 +13,7 @@ fn datetime_tool_schema_name() {
 async fn datetime_tool_returns_rfc3339() {
     let v = DateTimeTool.invoke(serde_json::json!({})).await.unwrap();
     let dt = v["datetime"].as_str().unwrap();
-    assert!(dt.contains("T"));  // ISO8601 format
+    assert!(dt.contains("T")); // ISO8601 format
     assert!(v["unix_timestamp"].is_number());
 }
 
@@ -27,7 +28,10 @@ async fn shell_tool_blocks_non_allowlist_cmd() {
 #[tokio::test]
 async fn shell_tool_runs_echo() {
     let tool = ShellTool::new(vec!["echo".into()], 5);
-    let v = tool.invoke(serde_json::json!({"command":"echo","args":["hello"]})).await.unwrap();
+    let v = tool
+        .invoke(serde_json::json!({"command":"echo","args":["hello"]}))
+        .await
+        .unwrap();
     assert_eq!(v["stdout"], "hello");
     assert_eq!(v["exit_code"], 0);
 }

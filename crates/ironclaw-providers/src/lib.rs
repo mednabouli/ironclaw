@@ -1,4 +1,3 @@
-
 pub mod registry;
 
 #[cfg(feature = "ollama")]
@@ -20,5 +19,4 @@ pub use openai::OpenAIProvider;
 pub mod groq;
 #[cfg(feature = "groq")]
 pub use groq::GroqProvider;
-
 pub use registry::ProviderRegistry;

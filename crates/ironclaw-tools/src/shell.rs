@@ -1,27 +1,33 @@
+use std::time::Duration;
 
 use async_trait::async_trait;
 use ironclaw_core::{Tool, ToolSchema};
 use serde_json::{json, Value};
-use std::time::Duration;
-use tokio::process::Command;
-use tokio::time::timeout;
+use tokio::{process::Command, time::timeout};
 use tracing::warn;
 
 pub struct ShellTool {
-    allowlist:    Vec<String>,
+    allowlist: Vec<String>,
     timeout_secs: u64,
 }
 
 impl ShellTool {
     pub fn new(allowlist: Vec<String>, timeout_secs: u64) -> Self {
-        Self { allowlist, timeout_secs }
+        Self {
+            allowlist,
+            timeout_secs,
+        }
     }
 }
 
 #[async_trait]
 impl Tool for ShellTool {
-    fn name(&self) -> &str { "shell" }
-    fn description(&self) -> &str { "Execute an allowlisted shell command and return stdout." }
+    fn name(&self) -> &str {
+        "shell"
+    }
+    fn description(&self) -> &str {
+        "Execute an allowlisted shell command and return stdout."
+    }
 
     fn schema(&self) -> ToolSchema {
         ToolSchema {
@@ -39,7 +45,8 @@ impl Tool for ShellTool {
     }
 
     async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let cmd = params["command"].as_str()
+        let cmd = params["command"]
+            .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing 'command' parameter"))?;
 
         if !self.allowlist.is_empty() && !self.allowlist.iter().any(|a| a == cmd) {
@@ -55,7 +62,8 @@ impl Tool for ShellTool {
         let output = timeout(
             Duration::from_secs(self.timeout_secs),
             Command::new(cmd).args(&args).output(),
-        ).await
+        )
+        .await
         .map_err(|_| anyhow::anyhow!("Command timed out after {}s", self.timeout_secs))?
         .map_err(|e| anyhow::anyhow!("Command failed: {e}"))?;
 

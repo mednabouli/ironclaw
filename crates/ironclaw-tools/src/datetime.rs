@@ -1,4 +1,3 @@
-
 use async_trait::async_trait;
 use ironclaw_core::{Tool, ToolSchema};
 use serde_json::{json, Value};
@@ -7,8 +6,12 @@ pub struct DateTimeTool;
 
 #[async_trait]
 impl Tool for DateTimeTool {
-    fn name(&self) -> &str { "get_datetime" }
-    fn description(&self) -> &str { "Get the current date and time in any timezone." }
+    fn name(&self) -> &str {
+        "get_datetime"
+    }
+    fn description(&self) -> &str {
+        "Get the current date and time in any timezone."
+    }
 
     fn schema(&self) -> ToolSchema {
         ToolSchema {
@@ -25,7 +28,10 @@ impl Tool for DateTimeTool {
     }
 
     async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let tz_str = params.get("timezone").and_then(|v| v.as_str()).unwrap_or("UTC");
+        let tz_str = params
+            .get("timezone")
+            .and_then(|v| v.as_str())
+            .unwrap_or("UTC");
         let now = chrono::Utc::now();
         Ok(json!({
             "datetime":       now.to_rfc3339(),

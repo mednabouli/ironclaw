@@ -14,7 +14,9 @@ fn local_bus_register_and_get_count() {
 async fn react_agent_role_is_worker() {
     use ironclaw_agents::AgentContext;
     use ironclaw_config::IronClawConfig;
-    let ctx   = AgentContext::from_config(IronClawConfig::default()).await.unwrap();
+    let ctx = AgentContext::from_config(IronClawConfig::default())
+        .await
+        .unwrap();
     let agent = ReActAgent::new(ctx);
     assert!(matches!(agent.role(), AgentRole::Worker));
 }

@@ -1,13 +1,12 @@
-
 pub mod inmemory;
 pub mod sqlite;
 
-pub use inmemory::InMemoryStore;
-pub use sqlite::SqliteStore;
+use std::sync::Arc;
 
+pub use inmemory::InMemoryStore;
 use ironclaw_config::IronClawConfig;
 use ironclaw_core::MemoryStore;
-use std::sync::Arc;
+pub use sqlite::SqliteStore;
 
 /// Build a [`MemoryStore`] from the loaded configuration.
 ///

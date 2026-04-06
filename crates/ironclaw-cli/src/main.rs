@@ -1,13 +1,12 @@
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use std::{path::PathBuf, sync::Arc};
-use tracing::{error, info, warn};
-
 use ironclaw_agents::{AgentContext, AgentHandler};
 use ironclaw_channels::{CliChannel, RestChannel};
 use ironclaw_config::IronClawConfig;
 use ironclaw_core::{Channel, CompletionRequest, Message};
+use tracing::{error, info, warn};
 
 #[derive(Parser)]
 #[command(
@@ -79,7 +78,10 @@ async fn main() -> anyhow::Result<()> {
         IronClawConfig::from_file(&cli.config)
             .with_context(|| format!("Failed to load config: {}", cli.config.display()))?
     } else {
-        warn!("Config file not found at '{}', using defaults", cli.config.display());
+        warn!(
+            "Config file not found at '{}', using defaults",
+            cli.config.display()
+        );
         IronClawConfig::default()
     };
 
@@ -96,11 +98,11 @@ async fn main() -> anyhow::Result<()> {
     info!(version = env!("CARGO_PKG_VERSION"), "IronClaw starting");
 
     match cli.command {
-        Commands::Start   => cmd_start(cfg).await?,
+        Commands::Start => cmd_start(cfg).await?,
         Commands::Chat { model } => cmd_chat(cfg, model).await?,
         Commands::Run { prompt, json } => cmd_run(cfg, prompt, json).await?,
-        Commands::Health  => cmd_health(cfg).await?,
-        Commands::List    => cmd_list(cfg).await?,
+        Commands::Health => cmd_health(cfg).await?,
+        Commands::List => cmd_list(cfg).await?,
         Commands::Sessions => cmd_sessions(cfg).await?,
         Commands::Search { query, limit } => cmd_search(cfg, query, limit).await?,
         Commands::ClearSession { session_id } => cmd_clear_session(cfg, session_id).await?,
@@ -111,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
 
 // ── start ─────────────────────────────────────────────────────────────────
 async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
-    let ctx     = AgentContext::from_config(cfg.clone()).await?;
+    let ctx = AgentContext::from_config(cfg.clone()).await?;
     let handler = Arc::new(AgentHandler::new(ctx));
 
     let mut handles = vec![];
@@ -119,7 +121,7 @@ async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
     for name in &cfg.channels.enabled {
         match name.as_str() {
             "rest" => {
-                let ch      = RestChannel::new(cfg.channels.rest.clone());
+                let ch = RestChannel::new(cfg.channels.rest.clone());
                 let handler = Arc::clone(&handler);
                 let h = tokio::spawn(async move {
                     if let Err(e) = ch.start(handler).await {
@@ -129,7 +131,7 @@ async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
                 handles.push(h);
             }
             "cli" => {
-                let ch      = CliChannel::default();
+                let ch = CliChannel::default();
                 let handler = Arc::clone(&handler);
                 let h = tokio::spawn(async move {
                     if let Err(e) = ch.start(handler).await {
@@ -154,28 +156,31 @@ async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
 
 // ── chat ──────────────────────────────────────────────────────────────────
 async fn cmd_chat(cfg: IronClawConfig, _model: Option<String>) -> anyhow::Result<()> {
-    let ctx     = AgentContext::from_config(cfg).await?;
+    let ctx = AgentContext::from_config(cfg).await?;
     let handler = Arc::new(AgentHandler::new(ctx));
-    let ch      = CliChannel::default();
+    let ch = CliChannel::default();
     ch.start(handler).await
 }
 
 // ── run ───────────────────────────────────────────────────────────────────
 async fn cmd_run(cfg: IronClawConfig, prompt: String, as_json: bool) -> anyhow::Result<()> {
-    let ctx      = AgentContext::from_config(cfg.clone()).await?;
-    let provider = ctx.providers.resolve().await
+    let ctx = AgentContext::from_config(cfg.clone()).await?;
+    let provider = ctx
+        .providers
+        .resolve()
+        .await
         .context("No provider available. Is Ollama running?")?;
 
     let req = CompletionRequest {
-        messages:    vec![
+        messages: vec![
             Message::system(&cfg.agent.system_prompt),
             Message::user(&prompt),
         ],
-        tools:       vec![],
-        max_tokens:  Some(cfg.agent.max_tokens),
+        tools: vec![],
+        max_tokens: Some(cfg.agent.max_tokens),
         temperature: Some(cfg.agent.temperature),
-        stream:      false,
-        model:       None,
+        stream: false,
+        model: None,
     };
 
     let resp = provider.complete(req).await?;
@@ -192,21 +197,23 @@ async fn cmd_run(cfg: IronClawConfig, prompt: String, as_json: bool) -> anyhow::
 async fn cmd_health(cfg: IronClawConfig) -> anyhow::Result<()> {
     use ironclaw_providers::ProviderRegistry;
 
-    println!("🦀 IronClaw v{}  —  Health Check", env!("CARGO_PKG_VERSION"));
+    println!(
+        "🦀 IronClaw v{}  —  Health Check",
+        env!("CARGO_PKG_VERSION")
+    );
     println!("{}", "─".repeat(40));
 
     let reg = ProviderRegistry::from_config(&cfg);
 
-    let provider_names = vec![
-        cfg.providers.primary.clone()
-    ].into_iter()
-     .chain(cfg.providers.fallback.clone())
-     .collect::<std::collections::HashSet<_>>();
+    let provider_names = vec![cfg.providers.primary.clone()]
+        .into_iter()
+        .chain(cfg.providers.fallback.clone())
+        .collect::<std::collections::HashSet<_>>();
 
     for name in provider_names {
         if let Some(p) = reg.get(&name) {
             match p.health_check().await {
-                Ok(_)  => println!("  ✅ {name}"),
+                Ok(_) => println!("  ✅ {name}"),
                 Err(e) => println!("  ❌ {name}  ({e})"),
             }
         } else {
@@ -222,13 +229,18 @@ async fn cmd_list(cfg: IronClawConfig) -> anyhow::Result<()> {
     println!("🦀 IronClaw v{}", env!("CARGO_PKG_VERSION"));
     println!("\n📡 Channels: {}", cfg.channels.enabled.join(", "));
 
-    let primary  = &cfg.providers.primary;
+    let primary = &cfg.providers.primary;
     let fallback = cfg.providers.fallback.join(", ");
     println!("\n🤖 Providers: {primary} (primary)");
-    if !fallback.is_empty() { println!("   Fallback: {fallback}"); }
+    if !fallback.is_empty() {
+        println!("   Fallback: {fallback}");
+    }
 
     println!("\n🔧 Tools: {}", cfg.tools.enabled.join(", "));
-    println!("\n💾 Memory: {} (max_history={})", cfg.memory.backend, cfg.memory.max_history);
+    println!(
+        "\n💾 Memory: {} (max_history={})",
+        cfg.memory.backend, cfg.memory.max_history
+    );
     Ok(())
 }
 
@@ -257,7 +269,7 @@ async fn cmd_search(cfg: IronClawConfig, query: String, limit: usize) -> anyhow:
         println!("🔍 Results for '{query}' ({} hits):", hits.len());
         for hit in &hits {
             let role = format!("{:?}", hit.message.role).to_lowercase();
-            let ts   = hit.message.timestamp.format("%Y-%m-%d %H:%M:%S");
+            let ts = hit.message.timestamp.format("%Y-%m-%d %H:%M:%S");
             let text = if hit.message.content.len() > 80 {
                 format!("{}…", &hit.message.content[..80])
             } else {

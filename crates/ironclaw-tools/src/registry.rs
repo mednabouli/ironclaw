@@ -1,7 +1,7 @@
-
-use ironclaw_core::{Tool, ToolSchema};
 use std::{collections::HashMap, sync::Arc};
+
 use ironclaw_config::IronClawConfig;
+use ironclaw_core::{Tool, ToolSchema};
 use tracing::info;
 
 pub struct ToolRegistry {
@@ -9,7 +9,11 @@ pub struct ToolRegistry {
 }
 
 impl ToolRegistry {
-    pub fn new() -> Self { Self { tools: HashMap::new() } }
+    pub fn new() -> Self {
+        Self {
+            tools: HashMap::new(),
+        }
+    }
 
     pub fn register(&mut self, tool: Arc<dyn Tool>) {
         info!("Registered tool: {}", tool.name());
@@ -28,7 +32,8 @@ impl ToolRegistry {
         if allowlist.is_empty() {
             return self.all_schemas();
         }
-        self.tools.iter()
+        self.tools
+            .iter()
             .filter(|(k, _)| allowlist.contains(k))
             .map(|(_, v)| v.schema())
             .collect()
@@ -39,7 +44,7 @@ impl ToolRegistry {
         for name in &cfg.tools.enabled {
             match name.as_str() {
                 "datetime" => reg.register(Arc::new(crate::datetime::DateTimeTool)),
-                "shell"    => reg.register(Arc::new(crate::shell::ShellTool::new(
+                "shell" => reg.register(Arc::new(crate::shell::ShellTool::new(
                     cfg.tools.shell.allowlist.clone(),
                     cfg.tools.shell.timeout_secs,
                 ))),
@@ -51,5 +56,7 @@ impl ToolRegistry {
 }
 
 impl Default for ToolRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }

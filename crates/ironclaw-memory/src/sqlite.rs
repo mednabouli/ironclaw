@@ -1,8 +1,11 @@
+use std::str::FromStr;
+
 use async_trait::async_trait;
 use ironclaw_core::{MemoryStore, Message, Role, SearchHit, SessionId, ToolCall, ToolResult};
-use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
-use sqlx::{Row, SqlitePool};
-use std::str::FromStr;
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Row, SqlitePool,
+};
 use uuid::Uuid;
 
 /// Persistent SQLite-backed session store.
@@ -112,7 +115,11 @@ impl MemoryStore for SqliteStore {
             Role::Tool => "tool",
         };
         let tc_json = serde_json::to_string(&msg.tool_calls)?;
-        let tr_json = msg.tool_result.as_ref().map(serde_json::to_string).transpose()?;
+        let tr_json = msg
+            .tool_result
+            .as_ref()
+            .map(serde_json::to_string)
+            .transpose()?;
         let ts_str = msg.timestamp.to_rfc3339();
 
         sqlx::query(

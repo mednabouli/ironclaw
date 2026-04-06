@@ -1,40 +1,40 @@
+use std::{net::SocketAddr, sync::Arc};
 
 use async_trait::async_trait;
 use axum::{
-    Router,
     extract::{Json, Request, State},
     http::{HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
+    Router,
 };
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
 use ironclaw_config::RestConfig;
+use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
 use tracing::{error, info, warn};
 
 #[derive(Clone)]
 struct AppState {
-    handler:    Arc<dyn MessageHandler>,
+    handler: Arc<dyn MessageHandler>,
     auth_token: String,
 }
 
 #[derive(Deserialize)]
 struct ChatRequest {
     session_id: Option<String>,
-    message:    String,
+    message: String,
 }
 
 #[derive(Serialize)]
 struct ChatResponse {
     session_id: String,
-    response:   String,
+    response: String,
 }
 
 #[derive(Serialize)]
 struct HealthResponse {
-    status:  &'static str,
+    status: &'static str,
     version: &'static str,
 }
 
@@ -64,23 +64,26 @@ async fn require_auth(
     next.run(request).await
 }
 
-async fn chat_handler(
-    State(state): State<AppState>,
-    Json(body):   Json<ChatRequest>,
-) -> Response {
-    let session_id = body.session_id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+async fn chat_handler(State(state): State<AppState>, Json(body): Json<ChatRequest>) -> Response {
+    let session_id = body
+        .session_id
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     let inbound = InboundMessage {
-        id:         uuid::Uuid::new_v4().to_string(),
-        channel:    ChannelId::Rest(session_id.clone()),
+        id: uuid::Uuid::new_v4().to_string(),
+        channel: ChannelId::Rest(session_id.clone()),
         session_id: session_id.clone(),
-        content:    body.message,
-        author:     None,
-        timestamp:  chrono::Utc::now(),
+        content: body.message,
+        author: None,
+        timestamp: chrono::Utc::now(),
     };
 
     match state.handler.handle(inbound).await {
-        Ok(Some(out)) => Json(ChatResponse { session_id, response: out.as_str().to_string() }).into_response(),
-        Ok(None)      => (StatusCode::NO_CONTENT, "").into_response(),
+        Ok(Some(out)) => Json(ChatResponse {
+            session_id,
+            response: out.as_str().to_string(),
+        })
+        .into_response(),
+        Ok(None) => (StatusCode::NO_CONTENT, "").into_response(),
         Err(e) => {
             error!(error = %e, "Handler error");
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
@@ -89,7 +92,10 @@ async fn chat_handler(
 }
 
 async fn health_handler() -> Json<HealthResponse> {
-    Json(HealthResponse { status: "ok", version: env!("CARGO_PKG_VERSION") })
+    Json(HealthResponse {
+        status: "ok",
+        version: env!("CARGO_PKG_VERSION"),
+    })
 }
 
 /// REST channel: serves `/v1/chat` (POST, auth-protected) and `/health` (GET, public).
@@ -99,12 +105,16 @@ pub struct RestChannel {
 
 impl RestChannel {
     /// Create a new REST channel from the given config.
-    pub fn new(config: RestConfig) -> Self { Self { config } }
+    pub fn new(config: RestConfig) -> Self {
+        Self { config }
+    }
 }
 
 #[async_trait]
 impl Channel for RestChannel {
-    fn name(&self) -> &'static str { "rest" }
+    fn name(&self) -> &'static str {
+        "rest"
+    }
 
     async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
         let state = AppState {
@@ -131,19 +141,24 @@ impl Channel for RestChannel {
         Ok(())
     }
 
-    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> anyhow::Result<()> { Ok(()) }
-    async fn stop(&self) -> anyhow::Result<()> { Ok(()) }
+    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> anyhow::Result<()> {
+        Ok(())
+    }
+    async fn stop(&self) -> anyhow::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use axum::{body::Body, http::Request as HttpRequest};
     use tower::util::ServiceExt;
 
+    use super::*;
+
     fn make_app(auth_token: &str) -> Router {
         let state = AppState {
-            handler:    Arc::new(crate::tests::NoopHandler),
+            handler: Arc::new(crate::tests::NoopHandler),
             auth_token: auth_token.to_string(),
         };
         Router::new()
@@ -156,7 +171,10 @@ mod tests {
     #[tokio::test]
     async fn health_is_public() {
         let app = make_app("secret");
-        let req = HttpRequest::builder().uri("/health").body(Body::empty()).unwrap();
+        let req = HttpRequest::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
         let resp = app.oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
     }
@@ -165,7 +183,8 @@ mod tests {
     async fn chat_rejects_missing_token() {
         let app = make_app("secret");
         let req = HttpRequest::builder()
-            .method("POST").uri("/v1/chat")
+            .method("POST")
+            .uri("/v1/chat")
             .header("content-type", "application/json")
             .body(Body::from(r#"{"message":"hi"}"#))
             .unwrap();
@@ -177,7 +196,8 @@ mod tests {
     async fn chat_rejects_wrong_token() {
         let app = make_app("secret");
         let req = HttpRequest::builder()
-            .method("POST").uri("/v1/chat")
+            .method("POST")
+            .uri("/v1/chat")
             .header("content-type", "application/json")
             .header("authorization", "Bearer wrong")
             .body(Body::from(r#"{"message":"hi"}"#))
@@ -191,7 +211,8 @@ mod tests {
         // When auth_token is empty, all requests pass through
         let app = make_app("");
         let req = HttpRequest::builder()
-            .method("POST").uri("/v1/chat")
+            .method("POST")
+            .uri("/v1/chat")
             .header("content-type", "application/json")
             .body(Body::from(r#"{"message":"hi"}"#))
             .unwrap();

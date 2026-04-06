@@ -63,10 +63,10 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
   msrv:
-    name: Minimum Supported Rust Version (1.75)
+    name: Minimum Supported Rust Version (1.78)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.75
+      - uses: dtolnay/rust-toolchain@1.78
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --workspace --all-features
