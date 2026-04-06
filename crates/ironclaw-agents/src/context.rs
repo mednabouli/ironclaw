@@ -25,11 +25,14 @@ impl AgentContext {
         Self { config, providers, tools, memory }
     }
 
-    pub fn from_config(cfg: IronClawConfig) -> Self {
-        let cfg     = Arc::new(cfg);
+    /// Build a context from the loaded configuration.
+    ///
+    /// This is async because the memory backend may need to open a database.
+    pub async fn from_config(cfg: IronClawConfig) -> anyhow::Result<Self> {
+        let cfg       = Arc::new(cfg);
         let providers = Arc::new(ProviderRegistry::from_config(&cfg));
         let tools     = Arc::new(ToolRegistry::from_config(&cfg));
-        let memory    = ironclaw_memory::from_config(&cfg);
-        Self::new(cfg, providers, tools, memory)
+        let memory    = ironclaw_memory::from_config(&cfg).await?;
+        Ok(Self::new(cfg, providers, tools, memory))
     }
 }

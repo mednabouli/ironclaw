@@ -50,6 +50,24 @@ enum Commands {
 
     /// List configured providers, channels, and tools
     List,
+
+    /// List all stored sessions
+    Sessions,
+
+    /// Search across all stored messages
+    Search {
+        /// Text to search for
+        query: String,
+        /// Maximum number of results
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+
+    /// Clear all messages for a session
+    ClearSession {
+        /// The session ID to clear
+        session_id: String,
+    },
 }
 
 #[tokio::main]
@@ -83,6 +101,9 @@ async fn main() -> anyhow::Result<()> {
         Commands::Run { prompt, json } => cmd_run(cfg, prompt, json).await?,
         Commands::Health  => cmd_health(cfg).await?,
         Commands::List    => cmd_list(cfg).await?,
+        Commands::Sessions => cmd_sessions(cfg).await?,
+        Commands::Search { query, limit } => cmd_search(cfg, query, limit).await?,
+        Commands::ClearSession { session_id } => cmd_clear_session(cfg, session_id).await?,
     }
 
     Ok(())
@@ -90,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
 
 // ── start ─────────────────────────────────────────────────────────────────
 async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
-    let ctx     = AgentContext::from_config(cfg.clone());
+    let ctx     = AgentContext::from_config(cfg.clone()).await?;
     let handler = Arc::new(AgentHandler::new(ctx));
 
     let mut handles = vec![];
@@ -133,7 +154,7 @@ async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
 
 // ── chat ──────────────────────────────────────────────────────────────────
 async fn cmd_chat(cfg: IronClawConfig, _model: Option<String>) -> anyhow::Result<()> {
-    let ctx     = AgentContext::from_config(cfg);
+    let ctx     = AgentContext::from_config(cfg).await?;
     let handler = Arc::new(AgentHandler::new(ctx));
     let ch      = CliChannel::default();
     ch.start(handler).await
@@ -141,7 +162,7 @@ async fn cmd_chat(cfg: IronClawConfig, _model: Option<String>) -> anyhow::Result
 
 // ── run ───────────────────────────────────────────────────────────────────
 async fn cmd_run(cfg: IronClawConfig, prompt: String, as_json: bool) -> anyhow::Result<()> {
-    let ctx      = AgentContext::from_config(cfg.clone());
+    let ctx      = AgentContext::from_config(cfg.clone()).await?;
     let provider = ctx.providers.resolve().await
         .context("No provider available. Is Ollama running?")?;
 
@@ -208,5 +229,50 @@ async fn cmd_list(cfg: IronClawConfig) -> anyhow::Result<()> {
 
     println!("\n🔧 Tools: {}", cfg.tools.enabled.join(", "));
     println!("\n💾 Memory: {} (max_history={})", cfg.memory.backend, cfg.memory.max_history);
+    Ok(())
+}
+
+// ── sessions ──────────────────────────────────────────────────────────────
+async fn cmd_sessions(cfg: IronClawConfig) -> anyhow::Result<()> {
+    let memory = ironclaw_memory::from_config(&cfg).await?;
+    let ids = memory.sessions().await?;
+    if ids.is_empty() {
+        println!("No sessions found.");
+    } else {
+        println!("📋 Sessions ({}):", ids.len());
+        for id in &ids {
+            println!("  • {id}");
+        }
+    }
+    Ok(())
+}
+
+// ── search ────────────────────────────────────────────────────────────────
+async fn cmd_search(cfg: IronClawConfig, query: String, limit: usize) -> anyhow::Result<()> {
+    let memory = ironclaw_memory::from_config(&cfg).await?;
+    let hits = memory.search(&query, limit).await?;
+    if hits.is_empty() {
+        println!("No results for '{query}'.");
+    } else {
+        println!("🔍 Results for '{query}' ({} hits):", hits.len());
+        for hit in &hits {
+            let role = format!("{:?}", hit.message.role).to_lowercase();
+            let ts   = hit.message.timestamp.format("%Y-%m-%d %H:%M:%S");
+            let text = if hit.message.content.len() > 80 {
+                format!("{}…", &hit.message.content[..80])
+            } else {
+                hit.message.content.clone()
+            };
+            println!("  [{ts}] ({}) {role}: {text}", hit.session_id);
+        }
+    }
+    Ok(())
+}
+
+// ── clear-session ─────────────────────────────────────────────────────────
+async fn cmd_clear_session(cfg: IronClawConfig, session_id: String) -> anyhow::Result<()> {
+    let memory = ironclaw_memory::from_config(&cfg).await?;
+    memory.clear(&session_id).await?;
+    println!("Cleared session '{session_id}'.");
     Ok(())
 }

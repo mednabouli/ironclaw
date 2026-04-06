@@ -68,6 +68,9 @@ tracing-subscriber  = { version = "0.3", features = ["env-filter", "json"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
 bytes   = "1"
 
+# Database
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite"] }
+
 # Concurrency / data structures
 dashmap = "6"
 uuid    = { version = "1", features = ["v4", "serde"] }

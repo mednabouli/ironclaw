@@ -141,13 +141,23 @@ pub struct ToolSchema {
     pub parameters:  serde_json::Value,
 }
 
-// ── Memory hit (RAG) ──────────────────────────────────────────────────────
+// ── Memory hit (RAG vector search) ───────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryHit {
     pub id:       String,
     pub text:     String,
     pub score:    f32,
     pub metadata: serde_json::Value,
+}
+
+// ── Conversation search result ────────────────────────────────────────────
+/// A single matching message returned by `MemoryStore::search`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchHit {
+    /// The session this message belongs to.
+    pub session_id: SessionId,
+    /// The matching message.
+    pub message:    Message,
 }
 
 // ── Agent types ───────────────────────────────────────────────────────────

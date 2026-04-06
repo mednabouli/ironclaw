@@ -48,7 +48,7 @@ jobs:
             archive: ironclaw-windows-x86_64.zip
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -91,7 +91,7 @@ jobs:
           Get-FileHash "$env:ARCHIVE" -Algorithm SHA256 | Select-Object Hash | Out-File "$env:ARCHIVE.sha256"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.target }}
           path: |
@@ -103,12 +103,12 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
@@ -143,7 +143,7 @@ jobs:
     runs-on: ubuntu-latest
     if: "!contains(github.ref, '-')"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
