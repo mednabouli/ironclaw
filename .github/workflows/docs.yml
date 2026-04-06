@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v3
+      - uses: Swatinem/rust-cache@v2
 
       - name: Build rustdoc
         run: cargo doc --workspace --no-deps --all-features
