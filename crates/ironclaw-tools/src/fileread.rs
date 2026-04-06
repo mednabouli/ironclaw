@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use serde_json::{json, Value};
 use tracing::warn;
 
@@ -46,10 +46,10 @@ impl Tool for FileReadTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "path": {
@@ -64,57 +64,61 @@ impl Tool for FileReadTool {
                 },
                 "required": ["path"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let path_str = params["path"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        (async move {
+            let path_str = params["path"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
 
-        let max_bytes = params["max_bytes"].as_u64().unwrap_or(65_536) as usize;
+            let max_bytes = params["max_bytes"].as_u64().unwrap_or(65_536) as usize;
 
-        // Resolve to canonical path to prevent traversal attacks
-        let path = tokio::fs::canonicalize(path_str)
-            .await
-            .map_err(|e| anyhow::anyhow!("Cannot resolve path '{path_str}': {e}"))?;
+            // Resolve to canonical path to prevent traversal attacks
+            let path = tokio::fs::canonicalize(path_str)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cannot resolve path '{path_str}': {e}"))?;
 
-        if !self.is_allowed(&path) {
-            warn!(path = %path.display(), "File read blocked: outside allowed directories");
-            anyhow::bail!(
-                "Access denied: '{}' is not within allowed directories",
-                path_str
-            );
-        }
+            if !self.is_allowed(&path) {
+                warn!(path = %path.display(), "File read blocked: outside allowed directories");
+                anyhow::bail!(
+                    "Access denied: '{}' is not within allowed directories",
+                    path_str
+                );
+            }
 
-        let metadata = tokio::fs::metadata(&path)
-            .await
-            .map_err(|e| anyhow::anyhow!("Cannot read metadata: {e}"))?;
+            let metadata = tokio::fs::metadata(&path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cannot read metadata: {e}"))?;
 
-        if !metadata.is_file() {
-            anyhow::bail!("'{}' is not a file", path_str);
-        }
+            if !metadata.is_file() {
+                anyhow::bail!("'{}' is not a file", path_str);
+            }
 
-        let file_size = metadata.len() as usize;
-        let content = tokio::fs::read(&path)
-            .await
-            .map_err(|e| anyhow::anyhow!("Cannot read file: {e}"))?;
+            let file_size = metadata.len() as usize;
+            let content = tokio::fs::read(&path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Cannot read file: {e}"))?;
 
-        let truncated = file_size > max_bytes;
-        let bytes = if truncated {
-            &content[..max_bytes]
-        } else {
-            &content
-        };
+            let truncated = file_size > max_bytes;
+            let bytes = if truncated {
+                &content[..max_bytes]
+            } else {
+                &content
+            };
 
-        let text = String::from_utf8_lossy(bytes);
+            let text = String::from_utf8_lossy(bytes);
 
-        Ok(json!({
-            "path": path.display().to_string(),
-            "content": text,
-            "size_bytes": file_size,
-            "truncated": truncated,
-        }))
+            Ok(json!({
+                "path": path.display().to_string(),
+                "content": text,
+                "size_bytes": file_size,
+                "truncated": truncated,
+            }))
+        })
+        .await
+        .map_err(Into::into)
     }
 }
 

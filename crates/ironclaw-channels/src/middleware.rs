@@ -19,7 +19,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ironclaw_core::{
-    BoxStream, ChannelId, InboundMessage, MessageHandler, OutboundMessage, StreamEvent,
+    BoxStream, ChannelId, HandlerError, InboundMessage, MessageHandler, OutboundMessage,
+    StreamEvent,
 };
 use tracing::{debug, info, warn};
 
@@ -41,7 +42,7 @@ impl LoggingMiddleware {
 
 #[async_trait]
 impl MessageHandler for LoggingMiddleware {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         let span = tracing::info_span!(
             "middleware.logging",
             channel = ?msg.channel,
@@ -70,7 +71,10 @@ impl MessageHandler for LoggingMiddleware {
         result
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         info!(
             channel = ?msg.channel,
             session_id = %msg.session_id,
@@ -149,7 +153,10 @@ impl SanitizationMiddleware {
 
 #[async_trait]
 impl MessageHandler for SanitizationMiddleware {
-    async fn handle(&self, mut msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(
+        &self,
+        mut msg: InboundMessage,
+    ) -> Result<Option<OutboundMessage>, HandlerError> {
         let original_len = msg.content.len();
         msg.content = self.sanitize(&msg.content);
 
@@ -164,7 +171,7 @@ impl MessageHandler for SanitizationMiddleware {
     async fn handle_stream(
         &self,
         mut msg: InboundMessage,
-    ) -> anyhow::Result<BoxStream<StreamEvent>> {
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         msg.content = self.sanitize(&msg.content);
         if msg.content.is_empty() {
             return Ok(Box::pin(futures::stream::empty()));
@@ -210,6 +217,7 @@ impl AuthMiddleware {
             ChannelId::Matrix(_) => "matrix",
             ChannelId::Cli => "cli",
             ChannelId::Custom(_) => "custom",
+            _ => "unknown",
         }
     }
 
@@ -245,14 +253,17 @@ impl AuthMiddleware {
 
 #[async_trait]
 impl MessageHandler for AuthMiddleware {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         if !self.is_authorized(&msg) {
             return Ok(None);
         }
         self.inner.handle(msg).await
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         if !self.is_authorized(&msg) {
             return Ok(Box::pin(futures::stream::empty()));
         }
@@ -279,7 +290,9 @@ impl RateLimitMiddleware {
 
     /// Extract a user identifier from the message for rate-limit keying.
     fn user_key(msg: &InboundMessage) -> String {
-        msg.author.clone().unwrap_or_else(|| msg.session_id.clone())
+        msg.author
+            .clone()
+            .unwrap_or_else(|| msg.session_id.to_string())
     }
 
     /// Extract a channel name from the message.
@@ -290,7 +303,7 @@ impl RateLimitMiddleware {
 
 #[async_trait]
 impl MessageHandler for RateLimitMiddleware {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         let user = Self::user_key(&msg);
         let channel = Self::channel_name(&msg);
 
@@ -305,7 +318,10 @@ impl MessageHandler for RateLimitMiddleware {
         self.inner.handle(msg).await
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         let user = Self::user_key(&msg);
         let channel = Self::channel_name(&msg);
 
@@ -409,7 +425,10 @@ impl PiiScrubMiddleware {
 
 #[async_trait]
 impl MessageHandler for PiiScrubMiddleware {
-    async fn handle(&self, mut msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(
+        &self,
+        mut msg: InboundMessage,
+    ) -> Result<Option<OutboundMessage>, HandlerError> {
         let original = msg.content.clone();
         msg.content = self.scrub(&msg.content);
 
@@ -426,7 +445,7 @@ impl MessageHandler for PiiScrubMiddleware {
     async fn handle_stream(
         &self,
         mut msg: InboundMessage,
-    ) -> anyhow::Result<BoxStream<StreamEvent>> {
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         msg.content = self.scrub(&msg.content);
         self.inner.handle_stream(msg).await
     }
@@ -513,7 +532,7 @@ impl PromptInjectionMiddleware {
 
 #[async_trait]
 impl MessageHandler for PromptInjectionMiddleware {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         if let Some(matched) = self.detect(&msg.content) {
             warn!(
                 session_id = %msg.session_id,
@@ -523,7 +542,7 @@ impl MessageHandler for PromptInjectionMiddleware {
 
             if self.config.block {
                 return Ok(Some(OutboundMessage::text(
-                    &msg.session_id,
+                    msg.session_id.clone(),
                     "Your message was blocked by the safety filter.",
                 )));
             }
@@ -532,7 +551,10 @@ impl MessageHandler for PromptInjectionMiddleware {
         self.inner.handle(msg).await
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         if let Some(matched) = self.detect(&msg.content) {
             warn!(
                 session_id = %msg.session_id,
@@ -591,7 +613,7 @@ impl AuditMiddleware {
 
 #[async_trait]
 impl MessageHandler for AuditMiddleware {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         let start = std::time::Instant::now();
 
         let content_preview = if self.config.log_content {
@@ -657,7 +679,10 @@ impl MessageHandler for AuditMiddleware {
         result
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         tracing::info!(
             target: "audit",
             event = "stream_request",
@@ -762,20 +787,23 @@ mod tests {
 
     #[async_trait]
     impl MessageHandler for EchoHandler {
-        async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
-            Ok(Some(OutboundMessage::text(&msg.session_id, &msg.content)))
+        async fn handle(
+            &self,
+            msg: InboundMessage,
+        ) -> Result<Option<OutboundMessage>, HandlerError> {
+            Ok(Some(OutboundMessage::text(
+                msg.session_id.clone(),
+                &msg.content,
+            )))
         }
     }
 
     fn make_msg(content: &str) -> InboundMessage {
-        InboundMessage {
-            id: "test-1".into(),
-            channel: ChannelId::Rest("s1".into()),
-            session_id: "s1".into(),
-            content: content.into(),
-            author: Some("alice".into()),
-            timestamp: chrono::Utc::now(),
-        }
+        InboundMessage::builder(ChannelId::Rest("s1".into()), content)
+            .id("test-1")
+            .session_id("s1")
+            .author("alice")
+            .build()
     }
 
     // ── Sanitization tests ───────────────────────────────────────────────

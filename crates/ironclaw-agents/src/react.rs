@@ -19,7 +19,7 @@ impl ReActAgent {
     pub fn new(ctx: AgentContext) -> Self {
         Self {
             ctx,
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
         }
     }
 
@@ -61,15 +61,11 @@ impl ReActAgent {
             debug!(iteration, "ReAct iteration");
 
             let cfg = self.ctx.config.load();
-            let req = CompletionRequest {
-                messages: messages.clone(),
-                tools: tool_schemas.clone(),
-                max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
-                temperature: Some(cfg.agent.temperature),
-                stream: false,
-                model: None,
-                response_format: Default::default(),
-            };
+            let req = CompletionRequest::builder(messages.clone())
+                .tools(tool_schemas.clone())
+                .max_tokens(task.max_tokens.unwrap_or(cfg.agent.max_tokens))
+                .temperature(cfg.agent.temperature)
+                .build();
 
             let resp = provider
                 .complete(req)
@@ -103,27 +99,20 @@ impl ReActAgent {
                 // Final answer
                 let text = resp.message.content.clone();
                 info!(tokens = total_usage.total_tokens, "ReAct complete");
-                return Ok(AgentOutput {
-                    task_id: task.id,
-                    agent_id: self.id.clone(),
-                    text,
-                    tool_calls: resp.message.tool_calls,
-                    approved: true,
-                    usage: total_usage,
-                });
+                return Ok(AgentOutput::new(task.id, self.id.clone(), text)
+                    .with_tool_calls(resp.message.tool_calls)
+                    .with_approved(true)
+                    .with_usage(total_usage));
             }
         }
 
         warn!("Max iterations ({MAX_ITERATIONS}) reached");
-        Ok(AgentOutput {
-            task_id: task.id,
-            agent_id: self.id.clone(),
-            text: "I reached the maximum number of reasoning steps. Please try a simpler request."
-                .into(),
-            tool_calls: vec![],
-            approved: false,
-            usage: total_usage,
-        })
+        Ok(AgentOutput::new(
+            task.id,
+            self.id.clone(),
+            "I reached the maximum number of reasoning steps. Please try a simpler request.",
+        )
+        .with_usage(total_usage))
     }
 
     /// Run a streaming ReAct loop with conversation history.
@@ -156,7 +145,7 @@ impl ReActAgent {
     /// Inner streaming ReAct loop that sends events through the channel.
     async fn stream_react_loop(
         ctx: AgentContext,
-        agent_id: String,
+        agent_id: AgentId,
         session_id: SessionId,
         task: AgentTask,
         tx: mpsc::Sender<anyhow::Result<StreamEvent>>,
@@ -182,15 +171,12 @@ impl ReActAgent {
             debug!(iteration, "Streaming ReAct iteration");
 
             let cfg = ctx.config.load();
-            let req = CompletionRequest {
-                messages: messages.clone(),
-                tools: tool_schemas.clone(),
-                max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
-                temperature: Some(cfg.agent.temperature),
-                stream: true,
-                model: None,
-                response_format: Default::default(),
-            };
+            let req = CompletionRequest::builder(messages.clone())
+                .tools(tool_schemas.clone())
+                .max_tokens(task.max_tokens.unwrap_or(cfg.agent.max_tokens))
+                .temperature(cfg.agent.temperature)
+                .stream(true)
+                .build();
 
             let mut stream = provider
                 .stream(req)
@@ -240,11 +226,7 @@ impl ReActAgent {
                 for (id, name, args_json) in tool_call_map.values() {
                     let arguments: serde_json::Value =
                         serde_json::from_str(args_json).unwrap_or(serde_json::json!({}));
-                    tool_calls.push(ToolCall {
-                        id: id.clone(),
-                        name: name.clone(),
-                        arguments: arguments.clone(),
-                    });
+                    tool_calls.push(ToolCall::new(id.clone(), name.clone(), arguments.clone()));
                 }
 
                 // Add assistant message to history
@@ -284,7 +266,7 @@ impl ReActAgent {
                 }
             } else {
                 // Final answer — done
-                info!(agent_id, "Streaming ReAct complete");
+                info!(%agent_id, "Streaming ReAct complete");
                 let _ = tx.send(Ok(StreamEvent::Done { usage: None })).await;
                 return Ok(());
             }
@@ -305,10 +287,10 @@ impl Agent for ReActAgent {
         AgentRole::Worker
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let mut messages = vec![Message::system(&self.ctx.config.load().agent.system_prompt)];
         messages.extend(task.context.clone());
         messages.push(Message::user(&task.instruction));
-        self.react_loop(task, messages).await
+        self.react_loop(task, messages).await.map_err(Into::into)
     }
 }

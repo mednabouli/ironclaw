@@ -6,7 +6,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serenity::all::*;
 use tokio::sync::Notify;
 use tracing::{debug, error, info};
@@ -65,7 +67,7 @@ impl EventHandler for DiscordHandler {
 
         let guild_id = command.guild_id.map(|g| g.to_string()).unwrap_or_default();
         let session_id = format!("discord-{}-{}", guild_id, command.user.id);
-        let author = Some(command.user.name.clone());
+        let author = command.user.name.clone();
 
         match command.data.name.as_str() {
             "chat" => {
@@ -94,14 +96,14 @@ impl EventHandler for DiscordHandler {
                     return;
                 }
 
-                let inbound = InboundMessage {
-                    id: command.id.to_string(),
-                    channel: ChannelId::Discord(command.channel_id.to_string()),
-                    session_id,
+                let inbound = InboundMessage::builder(
+                    ChannelId::Discord(command.channel_id.to_string()),
                     content,
-                    author,
-                    timestamp: chrono::Utc::now(),
-                };
+                )
+                .id(command.id.to_string())
+                .session_id(session_id)
+                .author(author)
+                .build();
 
                 let reply = match self.handler.handle(inbound).await {
                     Ok(Some(out)) => out.as_str().to_string(),
@@ -152,14 +154,12 @@ impl EventHandler for DiscordHandler {
         // Typing indicator
         let _typing = msg.channel_id.start_typing(&ctx.http);
 
-        let inbound = InboundMessage {
-            id: msg.id.to_string(),
-            channel: ChannelId::Discord(msg.channel_id.to_string()),
-            session_id,
-            content,
-            author: Some(msg.author.name.clone()),
-            timestamp: chrono::Utc::now(),
-        };
+        let inbound =
+            InboundMessage::builder(ChannelId::Discord(msg.channel_id.to_string()), content)
+                .id(msg.id.to_string())
+                .session_id(session_id)
+                .author(msg.author.name.clone())
+                .build();
 
         match self.handler.handle(inbound).await {
             Ok(Some(out)) => {
@@ -205,61 +205,69 @@ impl Channel for DiscordChannel {
         "discord"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let intents = GatewayIntents::GUILD_MESSAGES
-            | GatewayIntents::DIRECT_MESSAGES
-            | GatewayIntents::MESSAGE_CONTENT;
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let intents = GatewayIntents::GUILD_MESSAGES
+                | GatewayIntents::DIRECT_MESSAGES
+                | GatewayIntents::MESSAGE_CONTENT;
 
-        let event_handler = DiscordHandler {
-            handler: handler.clone(),
-        };
+            let event_handler = DiscordHandler {
+                handler: handler.clone(),
+            };
 
-        let mut client = Client::builder(&self.token, intents)
-            .event_handler(event_handler)
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to build Discord client: {e}"))?;
+            let mut client = Client::builder(&self.token, intents)
+                .event_handler(event_handler)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to build Discord client: {e}"))?;
 
-        let shard_manager = client.shard_manager.clone();
-        let shutdown = self.shutdown.clone();
+            let shard_manager = client.shard_manager.clone();
+            let shutdown = self.shutdown.clone();
 
-        info!("DiscordChannel starting");
+            info!("DiscordChannel starting");
 
-        tokio::select! {
-            result = client.start() => {
-                if let Err(e) = result {
-                    error!(error = %e, "Discord client error");
-                    return Err(anyhow::anyhow!("Discord client error: {e}"));
-                }
-            },
-            () = shutdown.notified() => {
-                info!("DiscordChannel shutdown signal received");
-                shard_manager.shutdown_all().await;
-            },
-        }
+            tokio::select! {
+                result = client.start() => {
+                    if let Err(e) = result {
+                        error!(error = %e, "Discord client error");
+                        return Err(anyhow::anyhow!("Discord client error: {e}"));
+                    }
+                },
+                () = shutdown.notified() => {
+                    info!("DiscordChannel shutdown signal received");
+                    shard_manager.shutdown_all().await;
+                },
+            }
 
-        Ok(())
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> anyhow::Result<()> {
-        let channel_id = match to {
-            ChannelId::Discord(id) => id
-                .parse::<u64>()
-                .map_err(|_| anyhow::anyhow!("Invalid Discord channel ID: {id}"))?,
-            other => anyhow::bail!("DiscordChannel cannot send to {other:?}"),
-        };
+    async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError> {
+        (async {
+            let channel_id = match to {
+                ChannelId::Discord(id) => id
+                    .parse::<u64>()
+                    .map_err(|_| anyhow::anyhow!("Invalid Discord channel ID: {id}"))?,
+                other => anyhow::bail!("DiscordChannel cannot send to {other:?}"),
+            };
 
-        let http = serenity::http::Http::new(&self.token);
-        let channel = serenity::all::ChannelId::new(channel_id);
-        channel
-            .say(&http, message.as_str())
-            .await
-            .map_err(|e| anyhow::anyhow!("Failed to send Discord message: {e}"))?;
+            let http = serenity::http::Http::new(&self.token);
+            let channel = serenity::all::ChannelId::new(channel_id);
+            channel
+                .say(&http, message.as_str())
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to send Discord message: {e}"))?;
 
-        debug!(channel_id = %channel_id, "Sent outbound Discord message");
-        Ok(())
+            debug!(channel_id = %channel_id, "Sent outbound Discord message");
+            Ok(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("DiscordChannel stopping");
         self.shutdown.notify_one();
         Ok(())

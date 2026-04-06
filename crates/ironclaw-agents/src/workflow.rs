@@ -174,15 +174,10 @@ impl WorkflowEngine {
         }
         messages.push(Message::user(&prompt));
 
-        let req = CompletionRequest {
-            messages,
-            tools: vec![],
-            max_tokens: step.max_tokens.or(Some(4096)),
-            temperature: step.temperature.or(Some(0.7)),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        };
+        let req = CompletionRequest::builder(messages)
+            .max_tokens(step.max_tokens.unwrap_or(4096))
+            .temperature(step.temperature.unwrap_or(0.7))
+            .build();
 
         info!(step = %step.id, provider = provider_name, "Executing step");
 

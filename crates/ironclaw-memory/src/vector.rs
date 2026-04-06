@@ -10,7 +10,7 @@
 //! [`VectorStore`] trait.
 
 use async_trait::async_trait;
-use ironclaw_core::{MemoryHit, VectorStore};
+use ironclaw_core::{MemoryError, MemoryHit, VectorStore};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
     Row, SqlitePool,
@@ -108,105 +108,114 @@ impl VectorStore for SqliteVectorStore {
         text: &str,
         embedding: &[f32],
         metadata: serde_json::Value,
-    ) -> anyhow::Result<()> {
-        if embedding.len() != self.dimensions {
-            anyhow::bail!(
-                "Embedding dimension mismatch: expected {}, got {}",
-                self.dimensions,
-                embedding.len()
-            );
-        }
+    ) -> Result<(), MemoryError> {
+        let r: anyhow::Result<()> = (async {
+            if embedding.len() != self.dimensions {
+                anyhow::bail!(
+                    "Embedding dimension mismatch: expected {}, got {}",
+                    self.dimensions,
+                    embedding.len()
+                );
+            }
 
-        let blob = Self::encode_vector(embedding);
-        let meta_json = serde_json::to_string(&metadata)?;
-        let now = chrono::Utc::now().to_rfc3339();
+            let blob = Self::encode_vector(embedding);
+            let meta_json = serde_json::to_string(&metadata)?;
+            let now = chrono::Utc::now().to_rfc3339();
 
-        sqlx::query(
-            "INSERT INTO embeddings (id, text, vector, metadata, created)
+            sqlx::query(
+                "INSERT INTO embeddings (id, text, vector, metadata, created)
              VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(id) DO UPDATE SET
                 text     = excluded.text,
                 vector   = excluded.vector,
                 metadata = excluded.metadata,
                 created  = excluded.created",
-        )
-        .bind(id)
-        .bind(text)
-        .bind(&blob)
-        .bind(&meta_json)
-        .bind(&now)
-        .execute(&self.pool)
-        .await?;
+            )
+            .bind(id)
+            .bind(text)
+            .bind(&blob)
+            .bind(&meta_json)
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
 
-        debug!(id, dims = embedding.len(), "Stored embedding");
-        Ok(())
+            debug!(id, dims = embedding.len(), "Stored embedding");
+            Ok(())
+        })
+        .await;
+        r.map_err(Into::into)
     }
 
     async fn search(
         &self,
         query_embedding: &[f32],
         limit: usize,
-    ) -> anyhow::Result<Vec<MemoryHit>> {
-        if query_embedding.len() != self.dimensions {
-            anyhow::bail!(
-                "Query embedding dimension mismatch: expected {}, got {}",
-                self.dimensions,
-                query_embedding.len()
-            );
-        }
+    ) -> Result<Vec<MemoryHit>, MemoryError> {
+        let r: anyhow::Result<Vec<MemoryHit>> = (async {
+            if query_embedding.len() != self.dimensions {
+                anyhow::bail!(
+                    "Query embedding dimension mismatch: expected {}, got {}",
+                    self.dimensions,
+                    query_embedding.len()
+                );
+            }
 
-        // Load all embeddings — this is the brute-force approach suitable
-        // for small-to-medium corpora. For 100k+ vectors, swap in an ANN
-        // index (HNSW via a dedicated vector DB).
-        let rows = sqlx::query("SELECT id, text, vector, metadata FROM embeddings")
-            .fetch_all(&self.pool)
-            .await?;
+            // Load all embeddings — this is the brute-force approach suitable
+            // for small-to-medium corpora. For 100k+ vectors, swap in an ANN
+            // index (HNSW via a dedicated vector DB).
+            let rows = sqlx::query("SELECT id, text, vector, metadata FROM embeddings")
+                .fetch_all(&self.pool)
+                .await?;
 
-        let mut scored: Vec<(f32, MemoryHit)> = Vec::with_capacity(rows.len());
+            let mut scored: Vec<(f32, MemoryHit)> = Vec::with_capacity(rows.len());
 
-        for row in &rows {
-            let id: String = row.get("id");
-            let text: String = row.get("text");
-            let blob: Vec<u8> = row.get("vector");
-            let meta_json: String = row.get("metadata");
+            for row in &rows {
+                let id: String = row.get("id");
+                let text: String = row.get("text");
+                let blob: Vec<u8> = row.get("vector");
+                let meta_json: String = row.get("metadata");
 
-            let stored = Self::decode_vector(&blob);
-            let score = Self::cosine_similarity(query_embedding, &stored);
+                let stored = Self::decode_vector(&blob);
+                let score = Self::cosine_similarity(query_embedding, &stored);
 
-            let metadata: serde_json::Value = serde_json::from_str(&meta_json).unwrap_or_default();
+                let metadata: serde_json::Value =
+                    serde_json::from_str(&meta_json).unwrap_or_default();
 
-            scored.push((
-                score,
-                MemoryHit {
-                    id,
-                    text,
-                    score,
-                    metadata,
-                },
-            ));
-        }
+                scored.push((score, MemoryHit::new(id, text, score, metadata)));
+            }
 
-        // Sort by descending score
-        scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
-        scored.truncate(limit);
+            // Sort by descending score
+            scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+            scored.truncate(limit);
 
-        Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+            Ok(scored.into_iter().map(|(_, hit)| hit).collect())
+        })
+        .await;
+        r.map_err(Into::into)
     }
 
-    async fn delete(&self, id: &str) -> anyhow::Result<()> {
-        sqlx::query("DELETE FROM embeddings WHERE id = ?1")
-            .bind(id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+    async fn delete(&self, id: &str) -> Result<(), MemoryError> {
+        let r: anyhow::Result<()> = (async {
+            sqlx::query("DELETE FROM embeddings WHERE id = ?1")
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
+            Ok(())
+        })
+        .await;
+        r.map_err(Into::into)
     }
 
-    async fn count(&self) -> anyhow::Result<usize> {
-        let row = sqlx::query("SELECT COUNT(*) AS cnt FROM embeddings")
-            .fetch_one(&self.pool)
-            .await?;
-        let cnt: i64 = row.get("cnt");
-        Ok(cnt as usize)
+    async fn count(&self) -> Result<usize, MemoryError> {
+        let r: anyhow::Result<usize> = (async {
+            let row = sqlx::query("SELECT COUNT(*) AS cnt FROM embeddings")
+                .fetch_one(&self.pool)
+                .await?;
+            let cnt: i64 = row.get("cnt");
+            Ok(cnt as usize)
+        })
+        .await;
+        r.map_err(Into::into)
     }
 }
 

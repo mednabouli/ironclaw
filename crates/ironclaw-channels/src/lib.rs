@@ -45,15 +45,20 @@ pub use matrix::MatrixChannel;
 #[cfg(test)]
 pub(crate) mod tests {
     use async_trait::async_trait;
-    use ironclaw_core::{InboundMessage, MessageHandler, OutboundMessage};
+    use ironclaw_core::{HandlerError, InboundMessage, MessageHandler, OutboundMessage};
 
     /// A no-op handler for unit tests that always returns an error (no real agent wired up).
     pub struct NoopHandler;
 
     #[async_trait]
     impl MessageHandler for NoopHandler {
-        async fn handle(&self, _msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
-            anyhow::bail!("NoopHandler: no agent configured")
+        async fn handle(
+            &self,
+            _msg: InboundMessage,
+        ) -> Result<Option<OutboundMessage>, HandlerError> {
+            Err(HandlerError::Other(anyhow::anyhow!(
+                "NoopHandler: no agent configured"
+            )))
         }
     }
 }

@@ -50,6 +50,7 @@ impl OpenAIProvider {
                 Role::User      => "user",
                 Role::Assistant => "assistant",
                 Role::Tool      => "tool",
+                _ => "user",
             };
             if let Some(tr) = &m.tool_result {
                 json!({ "role": role, "tool_call_id": tr.call_id, "content": tr.content.to_string() })
@@ -75,7 +76,8 @@ impl Provider for OpenAIProvider {
         true
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+        (async {
         let t0 = Instant::now();
         let model = req.model.as_deref().unwrap_or(&self.model).to_string();
         let mut body = json!({
@@ -119,11 +121,11 @@ impl Provider for OpenAIProvider {
                 let args: Value =
                     serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}"))
                         .unwrap_or(json!({}));
-                tool_calls.push(ToolCall {
+                tool_calls.push(ToolCall::new(
                     id,
                     name,
-                    arguments: args,
-                });
+                    args,
+                ));
             }
         }
 
@@ -139,41 +141,45 @@ impl Provider for OpenAIProvider {
         let mut msg = Message::assistant(content);
         msg.tool_calls = tool_calls;
 
-        Ok(CompletionResponse {
-            message: msg,
+        Ok::<_, anyhow::Error>(CompletionResponse::new(
+            msg,
             stop_reason,
-            usage: TokenUsage {
-                prompt_tokens: p,
-                completion_tokens: c,
-                total_tokens: p + c,
-            },
+            TokenUsage::new(p, c, p + c),
             model,
-            latency_ms: t0.elapsed().as_millis() as u64,
+            t0.elapsed().as_millis() as u64,
+        ))
+        }).await.map_err(Into::into)
+    }
+
+    async fn stream(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<BoxStream<StreamChunk>, ProviderError> {
+        (async {
+            let model = req.model.as_deref().unwrap_or(&self.model).to_string();
+            let body = json!({
+                "model":    model,
+                "messages": self.messages_to_json(&req.messages),
+                "stream":   true,
+            });
+            let response = self
+                .client
+                .post(format!("{}/v1/chat/completions", self.base_url))
+                .bearer_auth(&self.api_key)
+                .json(&body)
+                .send()
+                .await?
+                .error_for_status()?;
+
+            Ok::<_, anyhow::Error>(crate::sse::parse_openai_sse_stream(response))
         })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
-        let model = req.model.as_deref().unwrap_or(&self.model).to_string();
-        let body = json!({
-            "model":    model,
-            "messages": self.messages_to_json(&req.messages),
-            "stream":   true,
-        });
-        let response = self
-            .client
-            .post(format!("{}/v1/chat/completions", self.base_url))
-            .bearer_auth(&self.api_key)
-            .json(&body)
-            .send()
-            .await?
-            .error_for_status()?;
-
-        Ok(crate::sse::parse_openai_sse_stream(response))
-    }
-
-    async fn health_check(&self) -> anyhow::Result<()> {
+    async fn health_check(&self) -> Result<(), ProviderError> {
         if self.api_key.is_empty() {
-            anyhow::bail!("OpenAI: api_key not set");
+            return Err(ProviderError::Auth("OpenAI: api_key not set".into()));
         }
         Ok(())
     }

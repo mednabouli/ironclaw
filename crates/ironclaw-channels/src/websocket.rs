@@ -15,7 +15,9 @@ use axum::{
     Router,
 };
 use futures::{SinkExt, StreamExt};
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Notify;
 use tracing::{debug, error, info, warn};
@@ -94,14 +96,9 @@ async fn handle_ws(socket: WebSocket, state: WsState) {
             .session_id
             .unwrap_or_else(|| format!("ws-{conn_id}"));
 
-        let msg = InboundMessage {
-            id: uuid::Uuid::new_v4().to_string(),
-            channel: ChannelId::WebSocket(conn_id.clone()),
-            session_id: session_id.clone(),
-            content: inbound.content,
-            author: None,
-            timestamp: chrono::Utc::now(),
-        };
+        let msg = InboundMessage::builder(ChannelId::WebSocket(conn_id.clone()), inbound.content)
+            .session_id(session_id.clone())
+            .build();
 
         match state.handler.handle(msg).await {
             Ok(Some(out)) => {
@@ -131,32 +128,36 @@ impl Channel for WebSocketChannel {
         "websocket"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let state = WsState { handler };
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let state = WsState { handler };
 
-        let app = Router::new()
-            .route("/ws", get(ws_upgrade))
-            .with_state(state);
+            let app = Router::new()
+                .route("/ws", get(ws_upgrade))
+                .with_state(state);
 
-        let addr = format!("{}:{}", self.host, self.port);
-        let listener = tokio::net::TcpListener::bind(&addr).await?;
-        info!(addr = %addr, "WebSocketChannel listening on /ws");
+            let addr = format!("{}:{}", self.host, self.port);
+            let listener = tokio::net::TcpListener::bind(&addr).await?;
+            info!(addr = %addr, "WebSocketChannel listening on /ws");
 
-        let shutdown = self.shutdown.clone();
-        axum::serve(listener, app)
-            .with_graceful_shutdown(async move { shutdown.notified().await })
-            .await?;
+            let shutdown = self.shutdown.clone();
+            axum::serve(listener, app)
+                .with_graceful_shutdown(async move { shutdown.notified().await })
+                .await?;
 
-        Ok(())
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> anyhow::Result<()> {
+    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> Result<(), ChannelError> {
         // WebSocket responses are sent inline during the connection.
         // Out-of-band push would require connection tracking (not yet implemented).
         Ok(())
     }
 
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         info!("WebSocketChannel stopping");
         self.shutdown.notify_one();
         Ok(())

@@ -5,7 +5,7 @@
 //! unary minus, parentheses, and common math functions.
 
 use async_trait::async_trait;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use serde_json::{json, Value};
 
 /// Evaluate math expressions without external dependencies.
@@ -23,10 +23,10 @@ impl Tool for CalculatorTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "expression": {
@@ -36,20 +36,24 @@ impl Tool for CalculatorTool {
                 },
                 "required": ["expression"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
-        let expr = params["expression"]
-            .as_str()
-            .ok_or_else(|| anyhow::anyhow!("Missing 'expression' parameter"))?;
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        let result: anyhow::Result<Value> = async {
+            let expr = params["expression"]
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("Missing 'expression' parameter"))?;
 
-        let result = evaluate(expr)?;
+            let result = evaluate(expr)?;
 
-        Ok(json!({
-            "expression": expr,
-            "result": result,
-        }))
+            Ok(json!({
+                "expression": expr,
+                "result": result,
+            }))
+        }
+        .await;
+        result.map_err(Into::into)
     }
 }
 

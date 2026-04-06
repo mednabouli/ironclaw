@@ -77,8 +77,8 @@ fn pseudo_random_fraction(attempt: u32) -> f64 {
     (mixed as f64) / (u32::MAX as f64)
 }
 
-/// Check if an error message indicates a transient/retriable failure.
-fn is_transient(err: &anyhow::Error) -> bool {
+/// Check if an error indicates a transient/retriable failure.
+fn is_transient(err: &ProviderError) -> bool {
     let msg = err.to_string().to_lowercase();
     // HTTP status codes that are retriable
     if msg.contains("429")
@@ -122,7 +122,7 @@ impl Provider for RetryProvider {
         self.inner.supports_vision()
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
         let mut last_err = None;
         for attempt in 0..=self.config.max_retries {
             match self.inner.complete(req.clone()).await {
@@ -152,10 +152,15 @@ impl Provider for RetryProvider {
                 }
             }
         }
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Retry exhausted with no error captured")))
+        Err(last_err.unwrap_or_else(|| {
+            ProviderError::Other(anyhow::anyhow!("Retry exhausted with no error captured"))
+        }))
     }
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+    async fn stream(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<BoxStream<StreamChunk>, ProviderError> {
         // Retry the initial stream connection, not mid-stream errors
         let mut last_err = None;
         for attempt in 0..=self.config.max_retries {
@@ -180,10 +185,12 @@ impl Provider for RetryProvider {
                 }
             }
         }
-        Err(last_err.unwrap_or_else(|| anyhow::anyhow!("Retry exhausted with no error captured")))
+        Err(last_err.unwrap_or_else(|| {
+            ProviderError::Other(anyhow::anyhow!("Retry exhausted with no error captured"))
+        }))
     }
 
-    async fn health_check(&self) -> anyhow::Result<()> {
+    async fn health_check(&self) -> Result<(), ProviderError> {
         // Health checks are not retried — the registry handles fallback
         self.inner.health_check().await
     }
@@ -220,37 +227,45 @@ mod tests {
             false
         }
 
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
+        async fn complete(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<CompletionResponse, ProviderError> {
             let n = self.fail_count.fetch_add(1, Ordering::SeqCst);
             if n < self.max_failures {
                 if self.transient {
-                    anyhow::bail!("HTTP 503 Service Unavailable");
+                    return Err(ProviderError::Request(
+                        "HTTP 503 Service Unavailable".into(),
+                    ));
                 } else {
-                    anyhow::bail!("HTTP 401 Unauthorized");
+                    return Err(ProviderError::Auth("HTTP 401 Unauthorized".into()));
                 }
             }
-            Ok(CompletionResponse {
-                message: Message::assistant("ok"),
-                stop_reason: StopReason::EndTurn,
-                usage: TokenUsage::default(),
-                model: "test".into(),
-                latency_ms: 0,
-            })
+            Ok(CompletionResponse::new(
+                Message::assistant("ok"),
+                StopReason::EndTurn,
+                TokenUsage::default(),
+                "test",
+                0,
+            ))
         }
 
-        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> Result<BoxStream<StreamChunk>, ProviderError> {
             let n = self.fail_count.fetch_add(1, Ordering::SeqCst);
             if n < self.max_failures {
                 if self.transient {
-                    anyhow::bail!("connection timeout");
+                    return Err(ProviderError::Request("connection timeout".into()));
                 } else {
-                    anyhow::bail!("HTTP 403 Forbidden");
+                    return Err(ProviderError::Auth("HTTP 403 Forbidden".into()));
                 }
             }
             Ok(Box::pin(futures::stream::empty()))
         }
 
-        async fn health_check(&self) -> anyhow::Result<()> {
+        async fn health_check(&self) -> Result<(), ProviderError> {
             Ok(())
         }
     }
@@ -264,15 +279,10 @@ mod tests {
     }
 
     fn test_request() -> CompletionRequest {
-        CompletionRequest {
-            messages: vec![Message::user("hi")],
-            tools: vec![],
-            max_tokens: Some(100),
-            temperature: Some(0.7),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        }
+        CompletionRequest::builder(vec![Message::user("hi")])
+            .max_tokens(100)
+            .temperature(0.7)
+            .build()
     }
 
     #[tokio::test]
@@ -352,16 +362,30 @@ mod tests {
 
     #[test]
     fn is_transient_detects_retriable_errors() {
-        assert!(is_transient(&anyhow::anyhow!(
-            "HTTP 503 Service Unavailable"
+        assert!(is_transient(&ProviderError::Request(
+            "HTTP 503 Service Unavailable".into()
         )));
-        assert!(is_transient(&anyhow::anyhow!("HTTP 429 Too Many Requests")));
-        assert!(is_transient(&anyhow::anyhow!("rate limit exceeded")));
-        assert!(is_transient(&anyhow::anyhow!("connection reset by peer")));
-        assert!(is_transient(&anyhow::anyhow!("request timed out")));
-        assert!(!is_transient(&anyhow::anyhow!("HTTP 401 Unauthorized")));
-        assert!(!is_transient(&anyhow::anyhow!("HTTP 400 Bad Request")));
-        assert!(!is_transient(&anyhow::anyhow!("invalid json")));
+        assert!(is_transient(&ProviderError::Request(
+            "HTTP 429 Too Many Requests".into()
+        )));
+        assert!(is_transient(&ProviderError::Request(
+            "rate limit exceeded".into()
+        )));
+        assert!(is_transient(&ProviderError::Request(
+            "connection reset by peer".into()
+        )));
+        assert!(is_transient(&ProviderError::Request(
+            "request timed out".into()
+        )));
+        assert!(!is_transient(&ProviderError::Auth(
+            "HTTP 401 Unauthorized".into()
+        )));
+        assert!(!is_transient(&ProviderError::Other(anyhow::anyhow!(
+            "HTTP 400 Bad Request"
+        ))));
+        assert!(!is_transient(&ProviderError::InvalidResponse(
+            "invalid json".into()
+        )));
     }
 
     #[test]

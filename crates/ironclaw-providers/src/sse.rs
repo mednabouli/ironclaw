@@ -67,18 +67,18 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
                         if let Some(tc_arr) = delta_obj["tool_calls"].as_array() {
                             for tc in tc_arr {
                                 let index = tc["index"].as_u64().unwrap_or(0) as usize;
-                                let id = tc["id"].as_str().map(String::from);
-                                let name = tc["function"]["name"].as_str().map(String::from);
                                 let arguments_delta = tc["function"]["arguments"]
                                     .as_str()
                                     .unwrap_or("")
                                     .to_string();
-                                tool_calls.push(ToolCallDelta {
-                                    index,
-                                    id,
-                                    name,
-                                    arguments_delta,
-                                });
+                                let tcd = match (tc["id"].as_str(), tc["function"]["name"].as_str())
+                                {
+                                    (Some(id), Some(name)) => {
+                                        ToolCallDelta::first(index, id, name, arguments_delta)
+                                    }
+                                    _ => ToolCallDelta::new(index, arguments_delta),
+                                };
+                                tool_calls.push(tcd);
                             }
                         }
 
@@ -97,12 +97,7 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
 
                         let done = stop_reason.is_some();
                         let _ = tx
-                            .send(Ok(StreamChunk {
-                                delta,
-                                done,
-                                tool_calls,
-                                stop_reason,
-                            }))
+                            .send(Ok(StreamChunk::new(delta, done, tool_calls, stop_reason)))
                             .await;
                     }
                 }
@@ -187,17 +182,9 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                     // Emit the first delta so the consumer knows a
                                     // tool call is starting.
                                     let _ = tx
-                                        .send(Ok(StreamChunk {
-                                            delta: String::new(),
-                                            done: false,
-                                            tool_calls: vec![ToolCallDelta {
-                                                index,
-                                                id: Some(id),
-                                                name: Some(name),
-                                                arguments_delta: String::new(),
-                                            }],
-                                            stop_reason: None,
-                                        }))
+                                        .send(Ok(StreamChunk::with_tool_calls(vec![
+                                            ToolCallDelta::first(index, id, name, String::new()),
+                                        ])))
                                         .await;
                                 }
                                 // text blocks don't need special handling at start
@@ -214,14 +201,7 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                         let text =
                                             delta_obj["text"].as_str().unwrap_or("").to_string();
                                         if !text.is_empty() {
-                                            let _ = tx
-                                                .send(Ok(StreamChunk {
-                                                    delta: text,
-                                                    done: false,
-                                                    tool_calls: vec![],
-                                                    stop_reason: None,
-                                                }))
-                                                .await;
+                                            let _ = tx.send(Ok(StreamChunk::delta(text))).await;
                                         }
                                     }
                                     "input_json_delta" => {
@@ -240,18 +220,14 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                                     (Some(id.clone()), Some(name.clone()))
                                                 })
                                                 .unwrap_or((None, None));
+                                            let tcd = match (id, name) {
+                                                (Some(id), Some(name)) => {
+                                                    ToolCallDelta::first(index, id, name, partial)
+                                                }
+                                                _ => ToolCallDelta::new(index, partial),
+                                            };
                                             let _ = tx
-                                                .send(Ok(StreamChunk {
-                                                    delta: String::new(),
-                                                    done: false,
-                                                    tool_calls: vec![ToolCallDelta {
-                                                        index,
-                                                        id,
-                                                        name,
-                                                        arguments_delta: partial,
-                                                    }],
-                                                    stop_reason: None,
-                                                }))
+                                                .send(Ok(StreamChunk::with_tool_calls(vec![tcd])))
                                                 .await;
                                         }
                                     }
@@ -276,14 +252,7 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                     });
 
                                 if let Some(reason) = stop {
-                                    let _ = tx
-                                        .send(Ok(StreamChunk {
-                                            delta: String::new(),
-                                            done: true,
-                                            tool_calls: vec![],
-                                            stop_reason: Some(reason),
-                                        }))
-                                        .await;
+                                    let _ = tx.send(Ok(StreamChunk::done(reason))).await;
                                 }
                             }
 
@@ -350,12 +319,12 @@ pub fn parse_ollama_ndjson_stream(response: reqwest::Response) -> BoxStream<Stre
                                 let name =
                                     tc["function"]["name"].as_str().unwrap_or("").to_string();
                                 let args = tc["function"]["arguments"].to_string();
-                                tool_calls.push(ToolCallDelta {
-                                    index: i,
-                                    id: Some(uuid::Uuid::new_v4().to_string()),
-                                    name: Some(name),
-                                    arguments_delta: args,
-                                });
+                                tool_calls.push(ToolCallDelta::first(
+                                    i,
+                                    uuid::Uuid::new_v4().to_string(),
+                                    name,
+                                    args,
+                                ));
                             }
                         }
 
@@ -370,12 +339,7 @@ pub fn parse_ollama_ndjson_stream(response: reqwest::Response) -> BoxStream<Stre
                         };
 
                         let _ = tx
-                            .send(Ok(StreamChunk {
-                                delta,
-                                done,
-                                tool_calls,
-                                stop_reason,
-                            }))
+                            .send(Ok(StreamChunk::new(delta, done, tool_calls, stop_reason)))
                             .await;
 
                         if done {

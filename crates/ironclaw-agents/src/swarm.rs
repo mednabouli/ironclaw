@@ -54,7 +54,7 @@ impl SwarmEngine {
     /// Create a new swarm engine.
     pub fn new() -> Self {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
             nodes: vec![],
         }
     }
@@ -144,7 +144,7 @@ impl Agent for SwarmEngine {
         AgentRole::Orchestrator
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let span = tracing::info_span!(
             "swarm.run",
             agent_id = %self.id,
@@ -195,13 +195,14 @@ impl Agent for SwarmEngine {
                         }
                     }
 
-                    let sub_task = AgentTask {
-                        id: uuid::Uuid::new_v4(),
-                        instruction: base_instruction,
-                        context,
-                        tool_allowlist,
-                        max_tokens,
-                    };
+                    let mut builder = AgentTask::builder(base_instruction).context(context);
+                    if let Some(allowlist) = tool_allowlist {
+                        builder = builder.tool_allowlist(allowlist);
+                    }
+                    if let Some(n) = max_tokens {
+                        builder = builder.max_tokens(n);
+                    }
+                    let sub_task = builder.build();
 
                     let output = agent.run(sub_task).await;
                     (node_name, output)
@@ -253,14 +254,11 @@ impl Agent for SwarmEngine {
             "Swarm complete"
         );
 
-        Ok(AgentOutput {
-            task_id: task.id,
-            agent_id: self.id.clone(),
-            text: combined.join("\n\n"),
-            tool_calls: vec![],
-            approved: all_approved,
-            usage: total_usage,
-        })
+        Ok(
+            AgentOutput::new(task.id, self.id.clone(), combined.join("\n\n"))
+                .with_approved(all_approved)
+                .with_usage(total_usage),
+        )
     }
 }
 
@@ -283,7 +281,7 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
             // Include any upstream context in output so we can verify data flow
             let upstream: Vec<String> = task
                 .context
@@ -296,20 +294,13 @@ mod tests {
             } else {
                 format!("echo from {} (with upstream)", self.label)
             };
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text,
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+            Ok(AgentOutput::new(task.id, self.id.clone(), text).with_approved(true))
         }
     }
 
     fn make_echo(label: &str) -> Arc<dyn Agent> {
         Arc::new(NamedEchoAgent {
-            id: label.to_string(),
+            id: label.into(),
             label: label.to_string(),
         })
     }

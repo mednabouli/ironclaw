@@ -1,11 +1,11 @@
 //! File write tool — write or append to files sandboxed to allowed directories.
 //!
-//! Enforces the same path-traversal protection as [`FileReadTool`].
+//! Enforces the same path-traversal protection as [`crate::fileread::FileReadTool`].
 
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
-use ironclaw_core::{Tool, ToolSchema};
+use ironclaw_core::{Tool, ToolError, ToolSchema};
 use serde_json::{json, Value};
 use tracing::warn;
 
@@ -46,10 +46,10 @@ impl Tool for FileWriteTool {
     }
 
     fn schema(&self) -> ToolSchema {
-        ToolSchema {
-            name: self.name().to_string(),
-            description: self.description().to_string(),
-            parameters: json!({
+        ToolSchema::new(
+            self.name(),
+            self.description(),
+            json!({
                 "type": "object",
                 "properties": {
                     "path": {
@@ -68,10 +68,11 @@ impl Tool for FileWriteTool {
                 },
                 "required": ["path", "content"]
             }),
-        }
+        )
     }
 
-    async fn invoke(&self, params: Value) -> anyhow::Result<Value> {
+    async fn invoke(&self, params: Value) -> Result<Value, ToolError> {
+        (async move {
         let path_str = params["path"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
@@ -131,6 +132,7 @@ impl Tool for FileWriteTool {
             "bytes_written": bytes_written,
             "append": append,
         }))
+        }).await.map_err(Into::into)
     }
 }
 

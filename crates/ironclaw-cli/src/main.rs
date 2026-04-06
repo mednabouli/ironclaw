@@ -254,7 +254,7 @@ async fn cmd_chat(cfg: IronClawConfig, _model: Option<String>) -> anyhow::Result
     let ctx = AgentContext::from_config(cfg).await?;
     let handler = Arc::new(AgentHandler::new(ctx));
     let ch = CliChannel::default();
-    ch.start(handler).await
+    ch.start(handler).await.map_err(|e| anyhow::anyhow!(e))
 }
 
 // ── run ───────────────────────────────────────────────────────────────────
@@ -266,18 +266,13 @@ async fn cmd_run(cfg: IronClawConfig, prompt: String, as_json: bool) -> anyhow::
         .await
         .context("No provider available. Is Ollama running?")?;
 
-    let req = CompletionRequest {
-        messages: vec![
-            Message::system(&cfg.agent.system_prompt),
-            Message::user(&prompt),
-        ],
-        tools: vec![],
-        max_tokens: Some(cfg.agent.max_tokens),
-        temperature: Some(cfg.agent.temperature),
-        stream: false,
-        model: None,
-        response_format: Default::default(),
-    };
+    let req = CompletionRequest::builder(vec![
+        Message::system(&cfg.agent.system_prompt),
+        Message::user(&prompt),
+    ])
+    .max_tokens(cfg.agent.max_tokens)
+    .temperature(cfg.agent.temperature)
+    .build();
 
     // Show spinner while waiting for model response (only when not piped)
     let spinner = if std::io::stderr().is_terminal() && !as_json {
@@ -404,7 +399,8 @@ async fn cmd_clear_session(
 ) -> anyhow::Result<()> {
     if dry_run {
         let memory = ironclaw_memory::from_config(&cfg).await?;
-        let history = memory.history(&session_id, 1000).await?;
+        let sid = ironclaw_core::SessionId::from(session_id.as_str());
+        let history = memory.history(&sid, 1000).await?;
         println!(
             "Would clear session '{session_id}' ({} messages). Use without --dry-run to proceed.",
             history.len()
@@ -412,7 +408,8 @@ async fn cmd_clear_session(
         return Ok(());
     }
     let memory = ironclaw_memory::from_config(&cfg).await?;
-    memory.clear(&session_id).await?;
+    let sid = ironclaw_core::SessionId::from(session_id.as_str());
+    memory.clear(&sid).await?;
     println!("Cleared session '{session_id}'.");
     Ok(())
 }
@@ -500,15 +497,13 @@ async fn cmd_batch(
                     .resolve()
                     .await
                     .context("No provider available")?;
-                let req = CompletionRequest {
-                    messages: vec![Message::system(&system_prompt), Message::user(&item.prompt)],
-                    tools: vec![],
-                    max_tokens: Some(max_tokens),
-                    temperature: Some(temperature),
-                    stream: false,
-                    model: None,
-                    response_format: Default::default(),
-                };
+                let req = CompletionRequest::builder(vec![
+                    Message::system(&system_prompt),
+                    Message::user(&item.prompt),
+                ])
+                .max_tokens(max_tokens)
+                .temperature(temperature)
+                .build();
                 provider.complete(req).await
             }
             .await;
@@ -840,18 +835,13 @@ async fn cmd_bench(cfg: IronClawConfig, prompt: String, iterations: usize) -> an
         let mut last_model = String::new();
 
         for _ in 0..iterations {
-            let req = CompletionRequest {
-                messages: vec![
-                    Message::system(&cfg.agent.system_prompt),
-                    Message::user(&prompt),
-                ],
-                tools: vec![],
-                max_tokens: Some(cfg.agent.max_tokens),
-                temperature: Some(cfg.agent.temperature),
-                stream: false,
-                model: None,
-                response_format: Default::default(),
-            };
+            let req = CompletionRequest::builder(vec![
+                Message::system(&cfg.agent.system_prompt),
+                Message::user(&prompt),
+            ])
+            .max_tokens(cfg.agent.max_tokens)
+            .temperature(cfg.agent.temperature)
+            .build();
 
             let start = Instant::now();
             match provider.complete(req).await {

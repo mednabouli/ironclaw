@@ -19,7 +19,7 @@ impl ChainOfThoughtAgent {
     pub fn new(ctx: AgentContext) -> Self {
         Self {
             ctx,
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
         }
     }
 
@@ -62,7 +62,7 @@ impl Agent for ChainOfThoughtAgent {
         AgentRole::Worker
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let span = tracing::info_span!("cot.run", agent_id = %self.id);
         let _guard = span.enter();
         drop(_guard);
@@ -75,15 +75,14 @@ impl Agent for ChainOfThoughtAgent {
         messages.extend(task.context.clone());
         messages.push(Message::user(&task.instruction));
 
-        let req = CompletionRequest {
-            messages,
-            tools: vec![],
-            max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
-            temperature: Some(cfg.agent.temperature),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        };
+        let req = CompletionRequest::builder(messages)
+            .max_tokens(
+                task.max_tokens
+                    .or(Some(cfg.agent.max_tokens))
+                    .unwrap_or(4096),
+            )
+            .temperature(cfg.agent.temperature)
+            .build();
 
         let resp = provider.complete(req).await?;
         let (thinking, answer) = Self::split_thinking(&resp.message.content);
@@ -98,14 +97,9 @@ impl Agent for ChainOfThoughtAgent {
             "CoT complete"
         );
 
-        Ok(AgentOutput {
-            task_id: task.id,
-            agent_id: self.id.clone(),
-            text: answer,
-            tool_calls: vec![],
-            approved: true,
-            usage: resp.usage,
-        })
+        Ok(AgentOutput::new(task.id, self.id.clone(), answer)
+            .with_approved(true)
+            .with_usage(resp.usage))
     }
 }
 

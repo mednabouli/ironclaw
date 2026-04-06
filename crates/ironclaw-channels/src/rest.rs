@@ -13,7 +13,9 @@ use axum::{
     Router,
 };
 use ironclaw_config::RestConfig;
-use ironclaw_core::{Channel, ChannelId, InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{
+    Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
+};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
@@ -72,14 +74,9 @@ async fn chat_handler(State(state): State<AppState>, Json(body): Json<ChatReques
     let session_id = body
         .session_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let inbound = InboundMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        channel: ChannelId::Rest(session_id.clone()),
-        session_id: session_id.clone(),
-        content: body.message,
-        author: None,
-        timestamp: chrono::Utc::now(),
-    };
+    let inbound = InboundMessage::builder(ChannelId::Rest(session_id.clone()), body.message)
+        .session_id(session_id.clone())
+        .build();
 
     match state.handler.handle(inbound).await {
         Ok(Some(out)) => Json(ChatResponse {
@@ -123,14 +120,9 @@ async fn stream_chat_handler(
     let session_id = body
         .session_id
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    let inbound = InboundMessage {
-        id: uuid::Uuid::new_v4().to_string(),
-        channel: ChannelId::Rest(session_id.clone()),
-        session_id: session_id.clone(),
-        content: body.message,
-        author: None,
-        timestamp: chrono::Utc::now(),
-    };
+    let inbound = InboundMessage::builder(ChannelId::Rest(session_id.clone()), body.message)
+        .session_id(session_id.clone())
+        .build();
 
     let event_stream = match state.handler.handle_stream(inbound).await {
         Ok(s) => s,
@@ -149,6 +141,7 @@ async fn stream_chat_handler(
                     ironclaw_core::StreamEvent::ToolCallEnd { .. } => "tool_call_end",
                     ironclaw_core::StreamEvent::Done { .. } => "done",
                     ironclaw_core::StreamEvent::Error { .. } => "error",
+                    _ => "unknown",
                 };
                 match serde_json::to_string(&event) {
                     Ok(json) => Ok(Event::default().event(event_type).data(json)),
@@ -192,37 +185,41 @@ impl Channel for RestChannel {
         "rest"
     }
 
-    async fn start(&self, handler: Arc<dyn MessageHandler>) -> anyhow::Result<()> {
-        let state = AppState {
-            handler,
-            auth_token: self.config.auth_token.clone(),
-        };
+    async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError> {
+        (async {
+            let state = AppState {
+                handler,
+                auth_token: self.config.auth_token.clone(),
+            };
 
-        let app = Router::new()
-            // Protected routes — auth middleware applied via route_layer (only these routes)
-            .route("/v1/chat", post(chat_handler))
-            .route("/v1/chat/stream", post(stream_chat_handler))
-            .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
-            // Public routes — no auth required
-            .route("/health", get(health_handler))
-            .route("/metrics", get(metrics_handler))
-            .with_state(state);
+            let app = Router::new()
+                // Protected routes — auth middleware applied via route_layer (only these routes)
+                .route("/v1/chat", post(chat_handler))
+                .route("/v1/chat/stream", post(stream_chat_handler))
+                .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
+                // Public routes — no auth required
+                .route("/health", get(health_handler))
+                .route("/metrics", get(metrics_handler))
+                .with_state(state);
 
-        let addr: SocketAddr = format!("{}:{}", self.config.host, self.config.port)
-            .parse()
-            .map_err(|e| anyhow::anyhow!("Invalid REST addr: {e}"))?;
+            let addr: SocketAddr = format!("{}:{}", self.config.host, self.config.port)
+                .parse()
+                .map_err(|e| anyhow::anyhow!("Invalid REST addr: {e}"))?;
 
-        info!(addr = %addr, "REST channel listening");
+            info!(addr = %addr, "REST channel listening");
 
-        let listener = tokio::net::TcpListener::bind(addr).await?;
-        axum::serve(listener, app).await?;
-        Ok(())
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            axum::serve(listener, app).await?;
+            Ok::<(), anyhow::Error>(())
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> anyhow::Result<()> {
+    async fn send(&self, _to: &ChannelId, _message: OutboundMessage) -> Result<(), ChannelError> {
         Ok(())
     }
-    async fn stop(&self) -> anyhow::Result<()> {
+    async fn stop(&self) -> Result<(), ChannelError> {
         Ok(())
     }
 }
@@ -351,14 +348,18 @@ mod tests {
 
     #[async_trait]
     impl MessageHandler for StreamTestHandler {
-        async fn handle(&self, _msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+        async fn handle(
+            &self,
+            _msg: InboundMessage,
+        ) -> Result<Option<OutboundMessage>, ironclaw_core::HandlerError> {
             Ok(None)
         }
 
         async fn handle_stream(
             &self,
             _msg: InboundMessage,
-        ) -> anyhow::Result<ironclaw_core::BoxStream<ironclaw_core::StreamEvent>> {
+        ) -> Result<ironclaw_core::BoxStream<ironclaw_core::StreamEvent>, ironclaw_core::HandlerError>
+        {
             let events: Vec<anyhow::Result<ironclaw_core::StreamEvent>> = vec![
                 Ok(ironclaw_core::StreamEvent::TokenDelta {
                     delta: "Hello".into(),

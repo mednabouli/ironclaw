@@ -14,23 +14,19 @@ fn simple_request() -> CompletionRequest {
 
 fn tool_request() -> CompletionRequest {
     use ironclaw_core::ToolSchema;
-    CompletionRequest {
-        messages: vec![ironclaw_core::Message::user("What time is it?")],
-        tools: vec![ToolSchema {
-            name: "get_time".to_string(),
-            description: "Get the current time".to_string(),
-            parameters: json!({
+    CompletionRequest::builder(vec![ironclaw_core::Message::user("What time is it?")])
+        .tools(vec![ToolSchema::new(
+            "get_time",
+            "Get the current time",
+            json!({
                 "type": "object",
                 "properties": {},
                 "required": []
             }),
-        }],
-        max_tokens: Some(1024),
-        temperature: Some(0.5),
-        stream: false,
-        model: None,
-        response_format: Default::default(),
-    }
+        )])
+        .max_tokens(1024)
+        .temperature(0.5)
+        .build()
 }
 
 // ── Ollama ─────────────────────────────────────────────────────────────────
@@ -679,7 +675,7 @@ mod retry {
             .mock("POST", "/v1/chat/completions")
             .with_status(503)
             .with_body("Service Unavailable")
-            .expect(1)
+            .expect_at_least(1)
             .create_async()
             .await;
 

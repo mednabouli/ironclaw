@@ -74,6 +74,9 @@ impl AnthropicProvider {
                         msgs.push(json!({ "role": "user", "content": content }));
                     }
                 }
+                _ => {
+                    msgs.push(json!({ "role": "user", "content": m.content }));
+                }
             }
         }
         (system_prompt, msgs)
@@ -89,22 +92,23 @@ impl Provider for AnthropicProvider {
         true
     }
 
-    async fn complete(&self, req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
-        let t0 = Instant::now();
-        let model = req.model.as_deref().unwrap_or(&self.model).to_string();
-        let (system, messages) = self.build_messages(&req.messages);
+    async fn complete(&self, req: CompletionRequest) -> Result<CompletionResponse, ProviderError> {
+        (async {
+            let t0 = Instant::now();
+            let model = req.model.as_deref().unwrap_or(&self.model).to_string();
+            let (system, messages) = self.build_messages(&req.messages);
 
-        let mut body = json!({
-            "model":      model,
-            "max_tokens": req.max_tokens.unwrap_or(4096),
-            "messages":   messages,
-            "stream":     false,
-        });
-        if let Some(sp) = system {
-            body["system"] = json!(sp);
-        }
-        if !req.tools.is_empty() {
-            let tools: Vec<Value> = req
+            let mut body = json!({
+                "model":      model,
+                "max_tokens": req.max_tokens.unwrap_or(4096),
+                "messages":   messages,
+                "stream":     false,
+            });
+            if let Some(sp) = system {
+                body["system"] = json!(sp);
+            }
+            if !req.tools.is_empty() {
+                let tools: Vec<Value> = req
                 .tools
                 .iter()
                 .map(|t| {
@@ -113,100 +117,106 @@ impl Provider for AnthropicProvider {
                     })
                 })
                 .collect();
-            body["tools"] = json!(tools);
-        }
+                body["tools"] = json!(tools);
+            }
 
-        let resp: Value = self
-            .client
-            .post(format!("{}/v1/messages", self.base_url))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .context("Anthropic HTTP")?
-            .error_for_status()
-            .context("Anthropic API error")?
-            .json()
-            .await
-            .context("Anthropic JSON")?;
+            let resp: Value = self
+                .client
+                .post(format!("{}/v1/messages", self.base_url))
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&body)
+                .send()
+                .await
+                .context("Anthropic HTTP")?
+                .error_for_status()
+                .context("Anthropic API error")?
+                .json()
+                .await
+                .context("Anthropic JSON")?;
 
-        let mut text = String::new();
-        let mut tool_calls = vec![];
+            let mut text = String::new();
+            let mut tool_calls = vec![];
 
-        if let Some(content_arr) = resp["content"].as_array() {
-            for block in content_arr {
-                match block["type"].as_str().unwrap_or("") {
-                    "text" => {
-                        text.push_str(block["text"].as_str().unwrap_or(""));
+            if let Some(content_arr) = resp["content"].as_array() {
+                for block in content_arr {
+                    match block["type"].as_str().unwrap_or("") {
+                        "text" => {
+                            text.push_str(block["text"].as_str().unwrap_or(""));
+                        }
+                        "tool_use" => {
+                            tool_calls.push(ToolCall::new(
+                                block["id"].as_str().unwrap_or(""),
+                                block["name"].as_str().unwrap_or(""),
+                                block["input"].clone(),
+                            ));
+                        }
+                        _ => {}
                     }
-                    "tool_use" => {
-                        tool_calls.push(ToolCall {
-                            id: block["id"].as_str().unwrap_or("").to_string(),
-                            name: block["name"].as_str().unwrap_or("").to_string(),
-                            arguments: block["input"].clone(),
-                        });
-                    }
-                    _ => {}
                 }
             }
-        }
 
-        let stop_reason = match resp["stop_reason"].as_str().unwrap_or("end_turn") {
-            "tool_use" => StopReason::ToolUse,
-            "max_tokens" => StopReason::MaxTokens,
-            _ => StopReason::EndTurn,
-        };
+            let stop_reason = match resp["stop_reason"].as_str().unwrap_or("end_turn") {
+                "tool_use" => StopReason::ToolUse,
+                "max_tokens" => StopReason::MaxTokens,
+                _ => StopReason::EndTurn,
+            };
 
-        let p = resp["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32;
-        let c = resp["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32;
+            let p = resp["usage"]["input_tokens"].as_u64().unwrap_or(0) as u32;
+            let c = resp["usage"]["output_tokens"].as_u64().unwrap_or(0) as u32;
 
-        let mut msg = Message::assistant(text);
-        msg.tool_calls = tool_calls;
+            let mut msg = Message::assistant(text);
+            msg.tool_calls = tool_calls;
 
-        Ok(CompletionResponse {
-            message: msg,
-            stop_reason,
-            usage: TokenUsage {
-                prompt_tokens: p,
-                completion_tokens: c,
-                total_tokens: p + c,
-            },
-            model,
-            latency_ms: t0.elapsed().as_millis() as u64,
+            Ok::<_, anyhow::Error>(CompletionResponse::new(
+                msg,
+                stop_reason,
+                TokenUsage::new(p, c, p + c),
+                model,
+                t0.elapsed().as_millis() as u64,
+            ))
         })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn stream(&self, req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
-        let model = req.model.as_deref().unwrap_or(&self.model).to_string();
-        let (system, messages) = self.build_messages(&req.messages);
-        let mut body = json!({
-            "model": model,
-            "max_tokens": req.max_tokens.unwrap_or(4096),
-            "messages": messages,
-            "stream": true,
-        });
-        if let Some(sp) = system {
-            body["system"] = json!(sp);
-        }
+    async fn stream(
+        &self,
+        req: CompletionRequest,
+    ) -> Result<BoxStream<StreamChunk>, ProviderError> {
+        (async {
+            let model = req.model.as_deref().unwrap_or(&self.model).to_string();
+            let (system, messages) = self.build_messages(&req.messages);
+            let mut body = json!({
+                "model": model,
+                "max_tokens": req.max_tokens.unwrap_or(4096),
+                "messages": messages,
+                "stream": true,
+            });
+            if let Some(sp) = system {
+                body["system"] = json!(sp);
+            }
 
-        let response = self
-            .client
-            .post(format!("{}/v1/messages", self.base_url))
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
-            .json(&body)
-            .send()
-            .await?
-            .error_for_status()?;
+            let response = self
+                .client
+                .post(format!("{}/v1/messages", self.base_url))
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01")
+                .json(&body)
+                .send()
+                .await?
+                .error_for_status()?;
 
-        Ok(crate::sse::parse_anthropic_sse_stream(response))
+            Ok::<_, anyhow::Error>(crate::sse::parse_anthropic_sse_stream(response))
+        })
+        .await
+        .map_err(Into::into)
     }
 
-    async fn health_check(&self) -> anyhow::Result<()> {
+    async fn health_check(&self) -> Result<(), ProviderError> {
         if self.api_key.is_empty() {
-            anyhow::bail!("Anthropic: api_key not set");
+            return Err(ProviderError::Auth("Anthropic: api_key not set".into()));
         }
         Ok(())
     }

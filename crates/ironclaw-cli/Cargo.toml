@@ -11,6 +11,7 @@ repository.workspace = true
 [[bin]]
 name = "ironclaw"
 path = "src/main.rs"
+doc  = false
 
 [dependencies]
 ironclaw-core      = { workspace = true }

@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use ironclaw_core::{
-    BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent, ToolCall,
+    BoxStream, HandlerError, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent,
+    ToolCall,
 };
 use tokio::sync::Mutex;
 use tracing::{debug, error};
@@ -22,7 +23,7 @@ impl AgentHandler {
 
 #[async_trait]
 impl MessageHandler for AgentHandler {
-    async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
+    async fn handle(&self, msg: InboundMessage) -> Result<Option<OutboundMessage>, HandlerError> {
         let span = tracing::info_span!("handle", session = %msg.session_id, channel = ?msg.channel);
         let _g = span.enter();
 
@@ -59,7 +60,10 @@ impl MessageHandler for AgentHandler {
         }
     }
 
-    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+    async fn handle_stream(
+        &self,
+        msg: InboundMessage,
+    ) -> Result<BoxStream<StreamEvent>, HandlerError> {
         let span =
             tracing::info_span!("handle_stream", session = %msg.session_id, channel = ?msg.channel);
         let _g = span.enter();
@@ -102,11 +106,7 @@ impl MessageHandler for AgentHandler {
                     name,
                     arguments,
                 }) => {
-                    let tc = ToolCall {
-                        id: id.clone(),
-                        name: name.clone(),
-                        arguments: arguments.clone(),
-                    };
+                    let tc = ToolCall::new(id.clone(), name.clone(), arguments.clone());
                     tokio::spawn(async move {
                         tools.lock().await.push(tc);
                     });

@@ -27,7 +27,7 @@ impl PlannerAgent {
     pub fn new(ctx: AgentContext, worker: Arc<dyn Agent>, max_subtasks: usize) -> Self {
         Self {
             ctx,
-            id: uuid::Uuid::new_v4().to_string(),
+            id: uuid::Uuid::new_v4().to_string().into(),
             worker,
             max_subtasks: max_subtasks.max(1),
         }
@@ -83,7 +83,7 @@ impl Agent for PlannerAgent {
         AgentRole::Planner
     }
 
-    async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
+    async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
         let span = tracing::info_span!(
             "planner.run",
             agent_id = %self.id,
@@ -98,15 +98,10 @@ impl Agent for PlannerAgent {
         let plan_prompt = Self::planning_prompt(&task.instruction, self.max_subtasks);
         debug!(prompt = %plan_prompt, "Planning subtasks");
 
-        let req = CompletionRequest {
-            messages: vec![Message::user(&plan_prompt)],
-            tools: vec![],
-            max_tokens: Some(500),
-            temperature: Some(0.3),
-            stream: false,
-            model: None,
-            response_format: Default::default(),
-        };
+        let req = CompletionRequest::builder(vec![Message::user(&plan_prompt)])
+            .max_tokens(500)
+            .temperature(0.3)
+            .build();
 
         let resp = provider.complete(req).await?;
         let mut subtasks = Self::parse_subtasks(&resp.message.content);
@@ -125,13 +120,15 @@ impl Agent for PlannerAgent {
         let mut handles = Vec::new();
         for (i, subtask_instruction) in subtasks.iter().enumerate() {
             let worker = Arc::clone(&self.worker);
-            let sub_task = AgentTask {
-                id: uuid::Uuid::new_v4(),
-                instruction: subtask_instruction.clone(),
-                context: task.context.clone(),
-                tool_allowlist: task.tool_allowlist.clone(),
-                max_tokens: task.max_tokens,
-            };
+            let mut builder =
+                AgentTask::builder(subtask_instruction.clone()).context(task.context.clone());
+            if let Some(ref allowlist) = task.tool_allowlist {
+                builder = builder.tool_allowlist(allowlist.clone());
+            }
+            if let Some(n) = task.max_tokens {
+                builder = builder.max_tokens(n);
+            }
+            let sub_task = builder.build();
             debug!(subtask = i + 1, instruction = %subtask_instruction, "Dispatching subtask");
             handles.push(tokio::spawn(async move { worker.run(sub_task).await }));
         }
@@ -172,14 +169,9 @@ impl Agent for PlannerAgent {
             "Planner complete"
         );
 
-        Ok(AgentOutput {
-            task_id: task.id,
-            agent_id: self.id.clone(),
-            text: combined,
-            tool_calls: vec![],
-            approved: all_approved,
-            usage: total_usage,
-        })
+        Ok(AgentOutput::new(task.id, self.id.clone(), combined)
+            .with_approved(all_approved)
+            .with_usage(total_usage))
     }
 }
 
@@ -238,15 +230,13 @@ mod tests {
         fn role(&self) -> AgentRole {
             AgentRole::Worker
         }
-        async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-            Ok(AgentOutput {
-                task_id: task.id,
-                agent_id: self.id.clone(),
-                text: format!("Done: {}", task.instruction),
-                tool_calls: vec![],
-                approved: true,
-                usage: TokenUsage::default(),
-            })
+        async fn run(&self, task: AgentTask) -> Result<AgentOutput, AgentError> {
+            Ok(AgentOutput::new(
+                task.id,
+                self.id.clone(),
+                format!("Done: {}", task.instruction),
+            )
+            .with_approved(true))
         }
     }
 
