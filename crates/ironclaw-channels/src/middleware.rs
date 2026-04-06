@@ -381,40 +381,47 @@ impl PiiScrubMiddleware {
 
     /// Scrub PII from the given text, returning the cleaned version.
     fn scrub(&self, input: &str) -> String {
+        use std::sync::LazyLock;
+
+        static EMAIL_RE: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
+            regex_lite::Regex::new(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
+                .unwrap_or_else(|e| unreachable!("email regex is invalid: {e}"))
+        });
+        static SSN_RE: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
+            regex_lite::Regex::new(r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b")
+                .unwrap_or_else(|e| unreachable!("ssn regex is invalid: {e}"))
+        });
+        static CC_RE: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
+            regex_lite::Regex::new(r"\b(?:\d[-\s]?){13,19}\b")
+                .unwrap_or_else(|e| unreachable!("cc regex is invalid: {e}"))
+        });
+        static PHONE_RE: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
+            regex_lite::Regex::new(r"(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
+                .unwrap_or_else(|e| unreachable!("phone regex is invalid: {e}"))
+        });
+
         let mut s = input.to_string();
 
         if self.config.redact_emails {
-            // RFC-5322 simplified: word chars, dots, hyphens @ domain
-            let re = regex_lite::Regex::new(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}")
-                .expect("email regex is valid");
-            s = re
+            s = EMAIL_RE
                 .replace_all(&s, self.config.replacement.as_str())
                 .to_string();
         }
 
         if self.config.redact_ssns {
-            // SSN: 3-2-4 pattern with dashes or spaces
-            let re = regex_lite::Regex::new(r"\b\d{3}[-\s]\d{2}[-\s]\d{4}\b")
-                .expect("ssn regex is valid");
-            s = re
+            s = SSN_RE
                 .replace_all(&s, self.config.replacement.as_str())
                 .to_string();
         }
 
         if self.config.redact_credit_cards {
-            // Credit card: 13-19 digits with optional dashes/spaces
-            let re = regex_lite::Regex::new(r"\b(?:\d[-\s]?){13,19}\b").expect("cc regex is valid");
-            s = re
+            s = CC_RE
                 .replace_all(&s, self.config.replacement.as_str())
                 .to_string();
         }
 
         if self.config.redact_phones {
-            // US phone: optional +1, area code, 3-4 digits
-            let re =
-                regex_lite::Regex::new(r"(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b")
-                    .expect("phone regex is valid");
-            s = re
+            s = PHONE_RE
                 .replace_all(&s, self.config.replacement.as_str())
                 .to_string();
         }
@@ -497,10 +504,19 @@ impl PromptInjectionMiddleware {
 
     /// Wrap a handler with prompt injection detection.
     pub fn new(inner: Arc<dyn MessageHandler>, config: PromptInjectionConfig) -> Self {
-        let mut patterns: Vec<regex_lite::Regex> = Self::BUILTIN_PATTERNS
-            .iter()
-            .map(|p| regex_lite::Regex::new(p).expect("builtin injection regex is valid"))
-            .collect();
+        use std::sync::LazyLock;
+
+        static BUILTIN_REGEXES: LazyLock<Vec<regex_lite::Regex>> = LazyLock::new(|| {
+            PromptInjectionMiddleware::BUILTIN_PATTERNS
+                .iter()
+                .map(|p| {
+                    regex_lite::Regex::new(p)
+                        .unwrap_or_else(|e| unreachable!("builtin injection regex invalid: {e}"))
+                })
+                .collect()
+        });
+
+        let mut patterns: Vec<regex_lite::Regex> = BUILTIN_REGEXES.clone();
 
         for custom in &config.custom_patterns {
             match regex_lite::Regex::new(custom) {

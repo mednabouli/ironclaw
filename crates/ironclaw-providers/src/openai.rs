@@ -36,7 +36,7 @@ impl OpenAIProvider {
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
-                .expect("reqwest client"),
+                .unwrap_or_default(),
             api_key: api_key.into(),
             model: model.into(),
             base_url: base_url.into().trim_end_matches('/').to_string(),

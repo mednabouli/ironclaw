@@ -17,7 +17,7 @@ impl OllamaProvider {
             client: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
-                .expect("reqwest client"),
+                .unwrap_or_default(),
             base_url: base_url.into().trim_end_matches('/').to_string(),
             model: model.into(),
         }
