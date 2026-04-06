@@ -1,0 +1,31 @@
+
+[package]
+name    = "ironclaw-channels"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[features]
+default = ["rest", "cli"]
+rest    = ["axum", "tower-http"]
+cli     = []
+
+[dependencies]
+ironclaw-core   = { workspace = true }
+ironclaw-config = { workspace = true }
+async-trait  = { workspace = true }
+tokio        = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+anyhow       = { workspace = true }
+tracing      = { workspace = true }
+futures      = { workspace = true }
+
+axum         = { version = "0.7", optional = true }
+tower-http   = { version = "0.5", features = ["cors"], optional = true }
+
+uuid   = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.4", features = ["util"] }

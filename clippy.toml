@@ -1,0 +1,5 @@
+# IronClaw clippy configuration
+avoid-breaking-exported-api = false
+cognitive-complexity-threshold = 20
+too-many-arguments-threshold = 8
+type-complexity-threshold = 300

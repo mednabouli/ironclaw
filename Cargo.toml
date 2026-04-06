@@ -1,0 +1,82 @@
+[workspace]
+members = [
+    "crates/ironclaw-core",
+    "crates/ironclaw-config",
+    "crates/ironclaw-providers",
+    "crates/ironclaw-memory",
+    "crates/ironclaw-tools",
+    "crates/ironclaw-wasm",
+    "crates/ironclaw-channels",
+    "crates/ironclaw-agents",
+    "crates/ironclaw-cli",
+]
+resolver = "2"
+
+[workspace.package]
+version  = "0.1.1"
+edition  = "2021"
+license  = "MIT OR Apache-2.0"
+authors  = ["IronClaw Contributors"]
+homepage = "https://github.com/mednabouli/ironclaw"
+repository = "https://github.com/mednabouli/ironclaw"
+
+# ── Workspace-wide lints ───────────────────────────────────────────────────
+[workspace.lints.rust]
+unsafe_code     = "warn"
+missing_docs    = "warn"
+
+[workspace.lints.clippy]
+unwrap_used          = "warn"
+expect_used          = "warn"
+pedantic             = { level = "warn", priority = -1 }
+# Allow these pedantic lints project-wide
+module_name_repetitions = "allow"
+missing_errors_doc      = "allow"
+missing_panics_doc      = "allow"
+
+# ── Shared dependencies ────────────────────────────────────────────────────
+[workspace.dependencies]
+# Internal crates
+ironclaw-core      = { path = "crates/ironclaw-core" }
+ironclaw-config    = { path = "crates/ironclaw-config" }
+ironclaw-providers = { path = "crates/ironclaw-providers" }
+ironclaw-memory    = { path = "crates/ironclaw-memory" }
+ironclaw-tools     = { path = "crates/ironclaw-tools" }
+ironclaw-wasm      = { path = "crates/ironclaw-wasm" }
+ironclaw-channels  = { path = "crates/ironclaw-channels" }
+ironclaw-agents    = { path = "crates/ironclaw-agents" }
+
+# Async runtime
+tokio        = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures      = "0.3"
+async-trait  = "0.1"
+
+# Serialization
+serde        = { version = "1", features = ["derive"] }
+serde_json   = "1"
+
+# Error handling
+anyhow       = "1"
+thiserror    = "2"
+
+# Observability
+tracing             = "0.1"
+tracing-subscriber  = { version = "0.3", features = ["env-filter", "json"] }
+
+# HTTP
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+bytes   = "1"
+
+# Concurrency / data structures
+dashmap = "6"
+uuid    = { version = "1", features = ["v4", "serde"] }
+chrono  = { version = "0.4", features = ["serde"] }
+
+# ── Release profile: minimize binary size ─────────────────────────────────
+[profile.release]
+opt-level     = "z"    # optimize for size
+lto           = true   # link-time optimization
+codegen-units = 1      # single codegen unit for better LTO
+panic         = "abort" # smaller panic handler
+strip         = true   # strip symbols from binary

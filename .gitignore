@@ -1,0 +1,75 @@
+# ── Rust build artifacts ─────────────────────────────────────────────────
+/target
+**/*.rs.bk
+Cargo.lock.bk
+
+# ── Secrets & local config ───────────────────────────────────────────────
+.env
+*.env
+.env.local
+.env.*.local
+ironclaw.toml.local
+ironclaw.local.toml
+
+# ── Databases ────────────────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# ── WASM artifacts ───────────────────────────────────────────────────────
+*.wasm
+/plugins/
+
+# ── Logs & traces ────────────────────────────────────────────────────────
+*.log
+/logs/
+/traces/
+
+# ── Editor & OS files ────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.zed/
+
+# ── Distribution & build output ──────────────────────────────────────────
+/dist/
+/pkg/
+/out/
+*.tar.gz
+*.zip
+*.deb
+*.rpm
+
+# ── Coverage reports ─────────────────────────────────────────────────────
+/coverage/
+lcov.info
+*.profraw
+*.profdata
+
+# ── Benchmark output ─────────────────────────────────────────────────────
+/criterion/
+
+# ── Docker ───────────────────────────────────────────────────────────────
+.dockerignore
+
+# ── CI/CD temporary files ────────────────────────────────────────────────
+.github/workflows/*.bak
+
+# ── Test fixtures ────────────────────────────────────────────────────────
+/tests/fixtures/generated/
+#/docs
+#CLAUDE.md

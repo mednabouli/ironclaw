@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            binary: ironclaw
+            archive: ironclaw-linux-x86_64.tar.gz
+
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-latest
+            binary: ironclaw
+            archive: ironclaw-linux-aarch64.tar.gz
+
+          - target: armv7-unknown-linux-gnueabihf
+            os: ubuntu-latest
+            binary: ironclaw
+            archive: ironclaw-linux-armv7.tar.gz
+
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary: ironclaw
+            archive: ironclaw-macos-x86_64.tar.gz
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary: ironclaw
+            archive: ironclaw-macos-aarch64.tar.gz
+
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary: ironclaw.exe
+            archive: ironclaw-windows-x86_64.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cross (Linux cross-compile)
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@cross
+
+      - name: Build (Linux via cross)
+        if: runner.os == 'Linux'
+        run: cross build --release --target ${{ matrix.target }} -p ironclaw-cli
+
+      - name: Build (macOS/Windows native)
+        if: runner.os != 'Linux'
+        run: cargo build --release --target ${{ matrix.target }} -p ironclaw-cli
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+          ARCHIVE: ${{ matrix.archive }}
+        run: |
+          strip "target/$TARGET/release/$BINARY" 2>/dev/null || true
+          tar czf "$ARCHIVE" -C "target/$TARGET/release" "$BINARY"
+          sha256sum "$ARCHIVE" > "$ARCHIVE.sha256"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        env:
+          TARGET: ${{ matrix.target }}
+          BINARY: ${{ matrix.binary }}
+          ARCHIVE: ${{ matrix.archive }}
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "target/$env:TARGET/release/$env:BINARY" -DestinationPath "$env:ARCHIVE"
+          Get-FileHash "$env:ARCHIVE" -Algorithm SHA256 | Select-Object Hash | Out-File "$env:ARCHIVE.sha256"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          path: |
+            ${{ matrix.archive }}
+            ${{ matrix.archive }}.sha256
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Extract changelog section for this version
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/" CHANGELOG.md | head -n -1)
+          {
+            echo "NOTES<<EOF"
+            echo "$NOTES"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: IronClaw ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.NOTES }}
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.zip
+            artifacts/**/*.sha256
+          generate_release_notes: false
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: release
+    runs-on: ubuntu-latest
+    if: "!contains(github.ref, '-')"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo publish -p ironclaw-core        --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-config      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-providers   --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-memory      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-tools       --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-wasm        --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-channels    --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-agents      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - run: sleep 30
+      - run: cargo publish -p ironclaw-cli         --token ${{ secrets.CARGO_REGISTRY_TOKEN }}

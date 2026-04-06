@@ -1,0 +1,73 @@
+name: "✨ Feature Request"
+description: "Suggest a new feature or improvement."
+labels: ["feat", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please check the [Roadmap](../blob/main/ROADMAP.md)
+        first — your feature may already be planned.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: How important is this to you?
+      options:
+        - "P1 — Blocking my use case, I need this"
+        - "P2 — Would significantly improve my workflow"
+        - "P3 — Nice to have, not urgent"
+        - "P4 — Just an idea, take it or leave it"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - New Provider
+        - New Channel
+        - New Tool / Plugin
+        - Agent Pattern
+        - CLI Command
+        - Configuration
+        - Performance
+        - Security
+        - Documentation
+        - SDK / Ecosystem
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem this solves
+      description: What problem are you trying to solve? What can't you do today?
+      placeholder: "I can't do X because ..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like this to work?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Have you tried any workarounds?
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: willing
+    attributes:
+      label: Contribution
+      options:
+        - label: I'm willing to submit a PR for this feature
+          required: false

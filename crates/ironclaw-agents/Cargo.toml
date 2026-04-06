@@ -1,0 +1,22 @@
+
+[package]
+name    = "ironclaw-agents"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ironclaw-core      = { workspace = true }
+ironclaw-config    = { workspace = true }
+ironclaw-providers = { workspace = true }
+ironclaw-memory    = { workspace = true }
+ironclaw-tools     = { workspace = true }
+async-trait  = { workspace = true }
+tokio        = { workspace = true }
+serde        = { workspace = true }
+serde_json   = { workspace = true }
+anyhow       = { workspace = true }
+tracing      = { workspace = true }
+uuid         = { workspace = true }
+dashmap      = { workspace = true }
+futures      = { workspace = true }

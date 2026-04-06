@@ -1,0 +1,16 @@
+
+[package]
+name    = "ironclaw-memory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ironclaw-core   = { workspace = true }
+ironclaw-config = { workspace = true }
+async-trait  = { workspace = true }
+tokio        = { workspace = true }
+serde        = { workspace = true }
+anyhow       = { workspace = true }
+tracing      = { workspace = true }
+dashmap      = { workspace = true }
