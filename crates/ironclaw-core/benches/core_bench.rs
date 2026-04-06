@@ -1,7 +1,11 @@
-//! Core benchmarks — serialization, message construction, token usage arithmetic.
+//! Core benchmarks — serialization, message construction, token usage arithmetic,
+//! stream chunk serde, tool schema serde.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use ironclaw_core::{CompletionRequest, CompletionResponse, Message, StopReason, TokenUsage};
+use ironclaw_core::{
+    CompletionRequest, CompletionResponse, Message, StopReason, StreamChunk, StreamEvent,
+    TokenUsage, ToolCall, ToolCallDelta, ToolSchema,
+};
 
 fn bench_message_construction(c: &mut Criterion) {
     c.bench_function("Message::user", |b| {
@@ -63,6 +67,90 @@ fn bench_token_usage_default(c: &mut Criterion) {
     });
 }
 
+fn bench_stream_chunk_serde(c: &mut Criterion) {
+    let chunk = StreamChunk::new(
+        "Hello world token",
+        false,
+        vec![ToolCallDelta::first(0, "tc-1", "search", r#"{"q":"rust"#)],
+        None,
+    );
+
+    c.bench_function("StreamChunk serialize", |b| {
+        b.iter(|| serde_json::to_string(black_box(&chunk)).unwrap());
+    });
+
+    let json = serde_json::to_string(&chunk).unwrap();
+    c.bench_function("StreamChunk deserialize", |b| {
+        b.iter(|| serde_json::from_str::<StreamChunk>(black_box(&json)).unwrap());
+    });
+}
+
+fn bench_stream_event_serde(c: &mut Criterion) {
+    let events = vec![
+        StreamEvent::TokenDelta {
+            delta: "token".into(),
+        },
+        StreamEvent::ToolCallStart {
+            id: "call-1".into(),
+            name: "shell".into(),
+            arguments: serde_json::json!({"command": "ls -la"}),
+        },
+        StreamEvent::Done {
+            usage: Some(TokenUsage::new(100, 200, 300)),
+        },
+    ];
+    let json = serde_json::to_string(&events).unwrap();
+
+    c.bench_function("StreamEvent[] serialize", |b| {
+        b.iter(|| serde_json::to_string(black_box(&events)).unwrap());
+    });
+
+    c.bench_function("StreamEvent[] deserialize", |b| {
+        b.iter(|| serde_json::from_str::<Vec<StreamEvent>>(black_box(&json)).unwrap());
+    });
+}
+
+fn bench_tool_schema_serde(c: &mut Criterion) {
+    let schema = ToolSchema::new(
+        "file_search",
+        "Search files by glob pattern",
+        serde_json::json!({
+            "type": "object",
+            "properties": {
+                "pattern": { "type": "string", "description": "Glob pattern" },
+                "max_results": { "type": "integer", "default": 10 }
+            },
+            "required": ["pattern"]
+        }),
+    );
+
+    c.bench_function("ToolSchema serialize", |b| {
+        b.iter(|| serde_json::to_string(black_box(&schema)).unwrap());
+    });
+
+    let json = serde_json::to_string(&schema).unwrap();
+    c.bench_function("ToolSchema deserialize", |b| {
+        b.iter(|| serde_json::from_str::<ToolSchema>(black_box(&json)).unwrap());
+    });
+}
+
+fn bench_tool_call_serde(c: &mut Criterion) {
+    let call = ToolCall::new(
+        "call-42",
+        "web_search",
+        serde_json::json!({"query": "rust async trait", "limit": 5}),
+    );
+
+    c.bench_function("ToolCall serialize", |b| {
+        b.iter(|| serde_json::to_string(black_box(&call)).unwrap());
+    });
+
+    let json = serde_json::to_string(&call).unwrap();
+    c.bench_function("ToolCall deserialize", |b| {
+        b.iter(|| serde_json::from_str::<ToolCall>(black_box(&json)).unwrap());
+    });
+}
+
 criterion_group!(
     benches,
     bench_message_construction,
@@ -70,5 +158,9 @@ criterion_group!(
     bench_completion_request_serde,
     bench_completion_response_serde,
     bench_token_usage_default,
+    bench_stream_chunk_serde,
+    bench_stream_event_serde,
+    bench_tool_schema_serde,
+    bench_tool_call_serde,
 );
 criterion_main!(benches);

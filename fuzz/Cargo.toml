@@ -39,3 +39,8 @@ doc = false
 name = "fuzz_sse_lines"
 path = "fuzz_targets/fuzz_sse_lines.rs"
 doc = false
+
+[[bin]]
+name = "fuzz_rest_body"
+path = "fuzz_targets/fuzz_rest_body.rs"
+doc = false

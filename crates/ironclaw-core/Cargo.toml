@@ -24,6 +24,7 @@ chrono       = { workspace = true }
 [dev-dependencies]
 criterion = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
+proptest = { workspace = true }
 
 [[bench]]
 name = "core_bench"

@@ -39,3 +39,9 @@ uuid         = { workspace = true }
 [dev-dependencies]
 mockito      = "1"
 tokio        = { workspace = true }
+criterion    = { workspace = true }
+futures      = { workspace = true }
+
+[[bench]]
+name = "registry_bench"
+harness = false

@@ -90,3 +90,34 @@ jobs:
 
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
+
+  coverage:
+    name: Coverage Gate (≥80% ironclaw-core)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+
+      - name: Measure ironclaw-core coverage
+        run: |
+          cargo tarpaulin -p ironclaw-core --lib --tests --skip-clean \
+            --timeout 120 --out xml --output-dir target/tarpaulin
+
+      - name: Check coverage threshold
+        run: |
+          # Extract ironclaw-core line coverage from Cobertura XML
+          TOTAL=$(grep -oP 'line-rate="\K[^"]+' target/tarpaulin/cobertura.xml | head -1)
+          PCT=$(echo "$TOTAL * 100" | bc -l | xargs printf "%.1f")
+          echo "Coverage: ${PCT}%"
+          # Fail if below 80%
+          if (( $(echo "$TOTAL < 0.80" | bc -l) )); then
+            echo "::error::Coverage ${PCT}% is below the 80% threshold"
+            exit 1
+          fi
