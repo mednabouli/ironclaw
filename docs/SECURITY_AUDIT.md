@@ -12,8 +12,8 @@
 | FileWriteTool path traversal | ironclaw-tools | Critical | ✅ Audited (v0.1.1) |
 | REST auth middleware | ironclaw-channels | High | ✅ Audited (v0.1.1) |
 | REST auth rate limiting | ironclaw-channels | High | ✅ Implemented (v0.1.1) |
-| PII scrubbing completeness | ironclaw-channels | High | ⬜ Pending |
-| Prompt injection detection | ironclaw-channels | High | ⬜ Pending |
+| PII scrubbing completeness | ironclaw-channels | High | ✅ Implemented (v0.1.1) |
+| Prompt injection detection | ironclaw-channels | High | ✅ Implemented (v0.1.1) |
 | WASM sandbox escape | ironclaw-wasm | Critical | ⬜ Pending (wasmtime integration) |
 | Provider API key exposure | ironclaw-providers | High | ✅ Debug impls hide keys |
 | Session isolation | ironclaw-memory | High | ⬜ Pending |

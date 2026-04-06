@@ -23,8 +23,7 @@ Once v1.0.0 is released, the two most recent minor versions will receive securit
 
 ### Alternative: Email
 
-Send a PGP-encrypted email to `security@ironclaw.dev`  
-PGP key: _(published on keys.openpgp.org — fingerprint TBD at launch)_
+Send an email to `security@ironclaw.dev`
 
 ---
 

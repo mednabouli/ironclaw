@@ -9,12 +9,57 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+_No unreleased changes._
+
+---
+
+## [0.1.1] — 2026-04-12
+
+> Hardening release — API freeze, error handling, security, testing, documentation, and release infrastructure.
+
 ### Added
-- `SECURITY.md` — vulnerability disclosure policy and threat model
-- `CONTRIBUTING.md` — full contributor guide with PR checklist, branch naming, commit format
-- `CHANGELOG.md` — this file
-- `.gitignore` — excludes `target/`, `.env`, `*.db`, `*.wasm`, `.DS_Store`
-- `.env.example` — all environment variables documented with example values
+
+#### API Freeze Sprint
+- `#[non_exhaustive]` on all public enums (`Role`, `StopReason`, `AgentRole`, etc.)
+- Typed error enums with `thiserror` — `ProviderError`, `ToolError`, `ChannelError`, `ConfigError`, `MemoryError`
+- Newtype IDs — `SessionId`, `AgentId`, `ChannelId`, `MessageId` (Deref to inner str/String)
+- Builder pattern for `CompletionRequest`, `AgentTask`, `ToolSchema`
+- MSRV policy set to 1.86 and enforced in CI
+
+#### Error Hardening Sprint
+- Eliminated all `unwrap()` / `expect()` from library crates — replaced with `?` and `map_err()`
+- `#[must_use]` annotations on all builder methods and pure functions
+- Comprehensive error documentation with `/// # Errors` sections on all fallible public methods
+
+#### Security Sprint
+- SBOM generation (CycloneDX) in CI release workflow
+- Binary signing with `cosign` in release workflow
+- ShellTool audit — strict allowlist enforcement, path traversal prevention
+- FileReadTool / FileWriteTool — canonicalized path checking, sandbox directory enforcement
+- REST channel rate limiting via `tower::limit::RateLimitLayer`
+- `cargo-vet` supply chain audit — 4 trusted imports (Google, Mozilla, Zcash, Bytecode Alliance), publisher trusts, exemptions
+- `cargo-fuzz` targets for config parsing and provider response deserialization
+- `security.yml` — weekly `cargo audit` workflow
+
+#### Testing & Benchmarks Sprint
+- Criterion benchmarks — `registry_bench`, serde round-trip benchmarks in `benches/`
+- `proptest` property-based testing for core types (Message, CompletionRequest round-trips)
+- Test coverage gate in CI (94.6% line coverage at sprint completion)
+- 342 tests across all crates with all features enabled
+
+#### Documentation Sprint
+- `docs.rs` metadata in all crate `Cargo.toml` files (`all-features = true`, `rustdoc-args`)
+- `MIGRATION.md` — version migration guide with breaking change catalog
+- `VERSIONING.md` — semver policy, stability tiers, deprecation process
+- `/// # Examples` doc-tests on all core traits (`Provider`, `Tool`, `Channel`, `MemoryStore`, `Agent`)
+- `DOC.md` — consolidated documentation index
+
+#### Release & Publishing Sprint
+- `cargo-semver-checks` in CI — blocks merge on semver-incompatible changes
+- `release-plz.yml` workflow — automated changelog + version bump PRs
+- `cargo-dist` configuration for binary distribution
+- `backport.yml` workflow — automated cherry-pick to LTS branches on PR merge
+- Workspace dependency versions for crates.io publishing (`version = "0.1.1"` on all internal deps)
 
 ### Fixed
 - REST `chat_handler` now enforces `Authorization: Bearer <token>` when `auth_token` is configured
@@ -22,10 +67,21 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `AgentContext::try_from_config` replaces panicking `from_config`
 - Fixed duplicate `use std::io::Write` in `ironclaw-channels/src/cli.rs`
 - Fixed unused variable warning in `ironclaw-providers/src/registry.rs`
+- `retry::is_transient()` rewritten to match `ProviderError` variants instead of brittle string matching
+- Flaky retry integration tests stabilized with `serial_test` crate
+- `backport.yml` — fixed corrupt Unicode characters and YAML syntax errors in shell blocks
 
 ### Changed
-- `[workspace.lints]` added to `Cargo.toml` — `unsafe_code = "forbid"`, `unwrap_used = "deny"`
+- `[workspace.lints]` added to `Cargo.toml` — `unsafe_code = "warn"`, `missing_docs = "warn"`, clippy pedantic
 - Added `rustfmt.toml` — `max_width = 100`, `imports_granularity = "Crate"`
+- Provider error handling — all provider methods return structured `ProviderError` variants instead of opaque `anyhow::Error`
+- Config hot-reload — `arc-swap` based config swap via `ctx.config.load()` in `ironclaw-config`
+
+### Security
+- `SECURITY.md` — vulnerability disclosure policy and threat model
+- `SECURITY_AUDIT.md` — community audit checklist with v1.0 readiness tracking
+- `deny.toml` — `cargo-deny` configuration for license, advisory, and source auditing
+- `supply-chain/config.toml` — `cargo-vet` audit configuration with trusted imports
 
 ---
 
@@ -113,5 +169,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ---
 
-[Unreleased]: https://github.com/mednabouli/ironclaw/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mednabouli/ironclaw/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/mednabouli/ironclaw/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mednabouli/ironclaw/releases/tag/v0.1.0

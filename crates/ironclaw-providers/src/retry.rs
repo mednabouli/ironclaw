@@ -93,7 +93,9 @@ fn is_transient(err: &ProviderError) -> bool {
         // Request errors: check for transient HTTP status codes or network issues
         ProviderError::Request(msg) => {
             let msg = msg.to_lowercase();
-            msg.contains("503")
+            msg.contains("429")
+                || msg.contains("rate limit")
+                || msg.contains("503")
                 || msg.contains("502")
                 || msg.contains("504")
                 || msg.contains("connection")
