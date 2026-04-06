@@ -67,41 +67,47 @@ jobs:
 
             # Attempt the cherry-pick
             if git cherry-pick --no-commit "$MERGE_SHA"; then
-              git commit -m "chore(backport): #${PR_NUMBER} to ${branch}
-
-Cherry-picked from ${MERGE_SHA}
-Original PR: #${PR_NUMBER} — ${PR_TITLE}"
+              git commit -m "chore(backport): #${PR_NUMBER} to ${branch}" \
+                -m "Cherry-picked from ${MERGE_SHA}" \
+                -m "Original PR: #${PR_NUMBER} - ${PR_TITLE}"
 
               git push origin "$BACKPORT_BRANCH"
 
               # Create a PR for the backport
+              BODY=$(cat <<EOF
+              Automated backport of #${PR_NUMBER} to \`${branch}\`.
+
+              **Original PR:** #${PR_NUMBER} - ${PR_TITLE}
+              **Cherry-picked commit:** ${MERGE_SHA}
+
+              ---
+              _This PR was created automatically by the backport workflow._
+            EOF
+              )
               gh pr create \
                 --base "$branch" \
                 --head "$BACKPORT_BRANCH" \
-                --title "chore(backport): #${PR_NUMBER} → ${branch}" \
-                --body "Automated backport of #${PR_NUMBER} to \`${branch}\`.
-
-**Original PR:** #${PR_NUMBER} — ${PR_TITLE}
-**Cherry-picked commit:** ${MERGE_SHA}
-
----
-_This PR was created automatically by the backport workflow._"
+                --title "chore(backport): #${PR_NUMBER} -> ${branch}" \
+                --body "$BODY"
 
               echo "Created backport PR for $branch"
             else
-              # Cherry-pick had conflicts — create PR with conflict note
+              # Cherry-pick had conflicts -- create PR with conflict note
               git cherry-pick --abort
               echo "::warning::Cherry-pick to $branch had conflicts. Manual backport required."
 
-              gh issue comment "$PR_NUMBER" \
-                --body "⚠️ Automated backport to \`${branch}\` failed due to merge conflicts. Please cherry-pick manually:
+              CONFLICT_BODY=$(cat <<EOF
+              [!] Automated backport to \`${branch}\` failed due to merge conflicts. Please cherry-pick manually:
 
-\`\`\`bash
-git checkout $branch
-git cherry-pick $MERGE_SHA
-# resolve conflicts
-git push origin $branch
-\`\`\`"
+              \`\`\`bash
+              git checkout $branch
+              git cherry-pick $MERGE_SHA
+              # resolve conflicts
+              git push origin $branch
+              \`\`\`
+            EOF
+              )
+              gh issue comment "$PR_NUMBER" --body "$CONFLICT_BODY"
             fi
 
             git checkout main
