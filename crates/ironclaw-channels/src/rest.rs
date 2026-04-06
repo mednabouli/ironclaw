@@ -350,9 +350,7 @@ mod tests {
                 Ok(ironclaw_core::StreamEvent::TokenDelta {
                     delta: "Hello".into(),
                 }),
-                Ok(ironclaw_core::StreamEvent::Done {
-                    usage: None,
-                }),
+                Ok(ironclaw_core::StreamEvent::Done { usage: None }),
             ];
             Ok(Box::pin(futures::stream::iter(events)))
         }
@@ -415,6 +413,9 @@ mod tests {
         // Second event: done
         assert_eq!(events[1].0, "done");
         assert_eq!(events[1].1["type"], "done");
-        assert!(events[1].1["usage"].is_null(), "streaming usage should be null");
+        assert!(
+            events[1].1["usage"].is_null(),
+            "streaming usage should be null"
+        );
     }
 }
