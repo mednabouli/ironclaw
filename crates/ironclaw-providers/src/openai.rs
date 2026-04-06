@@ -26,17 +26,32 @@ impl std::fmt::Debug for OpenAIProvider {
 }
 
 impl OpenAIProvider {
-    /// Create a new OpenAI-compatible provider with the given API key, model, and base URL.
+    /// Create a new OpenAI-compatible provider, building its own HTTP client.
     pub fn new(
         api_key: impl Into<String>,
         model: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Self {
-        Self {
-            client: reqwest::Client::builder()
+        Self::with_client(
+            reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
                 .unwrap_or_default(),
+            api_key,
+            model,
+            base_url,
+        )
+    }
+
+    /// Create a new OpenAI-compatible provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+        base_url: impl Into<String>,
+    ) -> Self {
+        Self {
+            client,
             api_key: api_key.into(),
             model: model.into(),
             base_url: base_url.into().trim_end_matches('/').to_string(),

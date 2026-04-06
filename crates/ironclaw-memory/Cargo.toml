@@ -22,10 +22,16 @@ serde_json   = { workspace = true }
 anyhow       = { workspace = true }
 tracing      = { workspace = true }
 dashmap      = { workspace = true }
-sqlx         = { workspace = true }
-redis        = { workspace = true }
+sqlx         = { workspace = true, optional = true }
+redis        = { workspace = true, optional = true }
 uuid         = { workspace = true }
 chrono       = { workspace = true }
+
+[features]
+default = ["sqlite"]
+sqlite  = ["sqlx"]
+redis-backend = ["redis"]
+all     = ["sqlite", "redis-backend"]
 
 [dev-dependencies]
 criterion = { workspace = true }

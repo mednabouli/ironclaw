@@ -23,6 +23,19 @@ impl TogetherProvider {
             "https://api.together.xyz",
         ))
     }
+    /// Create a new Together provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self(OpenAIProvider::with_client(
+            client,
+            api_key,
+            model,
+            "https://api.together.xyz",
+        ))
+    }
 }
 
 #[async_trait::async_trait]

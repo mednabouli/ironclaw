@@ -1,3 +1,4 @@
+#[cfg(feature = "prometheus")]
 pub mod metrics;
 pub mod middleware;
 pub mod ratelimit;

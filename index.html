@@ -4,9 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>IronClaw — Ultra-lightweight AI Agent Framework in Rust</title>
-  <meta name="description" content="One binary. Any LLM. Every channel. Agent swarms. WASM plugins. Under 2MB." />
+  <meta name="description" content="One binary. 8 LLM providers. 8 channels. Agent swarms. WASM plugins. ~4.4 MB." />
   <meta property="og:title" content="IronClaw — AI Agent Framework in Rust" />
-  <meta property="og:description" content="One binary. Any LLM. Every channel. Under 2MB." />
+  <meta property="og:description" content="One binary. 8 LLM providers. 8 channels. ~4.4 MB." />
   <meta property="og:type" content="website" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦀</text></svg>" />
   <style>
@@ -375,7 +375,7 @@
       <span class="badge">⚡ Now in Public Beta</span>
     </div>
     <h1>Ultra-lightweight <em>AI Agent</em><br>Framework in Rust</h1>
-    <p>One binary. Any LLM. Every channel. Agent swarms. WASM plugins. Under 2MB.</p>
+    <p>One binary. 8 LLM providers. 8 channels. Agent swarms. WASM plugins. ~4.4 MB.</p>
     <div class="hero-ctas">
       <a href="#quickstart" class="btn btn-primary">Get Started →</a>
       <a href="https://github.com/mednabouli/ironclaw" class="btn btn-ghost" target="_blank" rel="noopener">
@@ -394,10 +394,10 @@
       </div>
       <div class="terminal-body" id="terminal-body">
         <span class="t-line"><span class="t-prompt">$ </span><span class="t-cmd" id="t-install"></span><span class="cursor" id="cursor"></span></span>
-        <span class="t-line" id="t-line2" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Downloading IronClaw v0.1.0 for linux-aarch64...</span></span>
-        <span class="t-line" id="t-line3" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Installed to ~/.local/bin/ironclaw (1.8MB)</span></span>
+        <span class="t-line" id="t-line2" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Downloading IronClaw v0.1.1 for linux-aarch64...</span></span>
+        <span class="t-line" id="t-line3" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Installed to ~/.local/bin/ironclaw (4.4 MB)</span></span>
         <span class="t-line" id="t-line4" style="display:none"><span class="t-prompt">$ </span><span class="t-cmd">ironclaw start</span></span>
-        <span class="t-line" id="t-line5" style="display:none"><span class="t-ok">🦀</span> <span class="t-dim">IronClaw v0.1.0 — startup: <span style="color:var(--rust)">3.7ms</span></span></span>
+        <span class="t-line" id="t-line5" style="display:none"><span class="t-ok">🦀</span> <span class="t-dim">IronClaw v0.1.1 — startup: <span style="color:var(--rust)">57ms</span></span></span>
         <span class="t-line" id="t-line6" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Provider: ollama (llama3.3:70b)</span></span>
         <span class="t-line" id="t-line7" style="display:none"><span class="t-ok">✅</span> <span class="t-dim">Channel: telegram — connected</span></span>
         <span class="t-line" id="t-line8" style="display:none"><span class="t-ok">🚀</span> <span class="t-dim">All systems nominal</span></span>
@@ -422,19 +422,19 @@
   <div class="container">
     <div class="stats-grid">
       <div class="stat-item">
-        <div class="stat-val">&lt;2MB</div>
+        <div class="stat-val">4.4 MB</div>
         <div class="stat-label">Binary size</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val">&lt;5ms</div>
+        <div class="stat-val">~57ms</div>
         <div class="stat-label">Cold startup</div>
       </div>
       <div class="stat-item">
-        <div class="stat-val">&lt;3MB</div>
+        <div class="stat-val">~7.5 MB</div>
         <div class="stat-label">RAM at idle</div>
       </div>
       <div class="stat-item" style="border-right:none">
-        <div class="stat-val">20+</div>
+        <div class="stat-val">8</div>
         <div class="stat-label">Channels</div>
       </div>
     </div>
@@ -452,32 +452,32 @@
       <div class="feature-card fade-up">
         <div class="feat-icon">🧩</div>
         <div class="feat-title">WASM Plugin System</div>
-        <div class="feat-desc">Ship tools as <code style="color:var(--rust)">.wasm</code> files. Full sandbox via wasmtime Component Model — zero unsafe FFI, memory limits, CPU timeout.</div>
+        <div class="feat-desc">Ship tools as <code style="color:var(--rust)">.wasm</code> files. Manifest parsing, capability grants, and plugin installer ready — full <code style="color:var(--rust)">wasmtime</code> sandbox execution coming soon.</div>
       </div>
       <div class="feature-card fade-up">
         <div class="feat-icon">🤖</div>
         <div class="feat-title">Agent Swarms</div>
-        <div class="feat-desc">ReAct, CriticActor, Router, ChainOfThought, and Planner patterns baked into the core. Delegate subtasks across a DAG of specialized agents.</div>
+        <div class="feat-desc">ReAct, CriticActor, Router, ChainOfThought, Planner, Swarm, and Workflow patterns built in. Delegate subtasks across a DAG of specialized agents with eval harness.</div>
       </div>
       <div class="feature-card fade-up">
         <div class="feat-icon">⚡</div>
-        <div class="feat-title">Ollama-First</div>
-        <div class="feat-desc">Local inference is the zero-config default. Cloud providers (Claude, OpenAI, Groq) are opt-in. Automatic failover chain with health checks.</div>
+        <div class="feat-title">8 LLM Providers</div>
+        <div class="feat-desc">Ollama, Claude, OpenAI, Groq, OpenRouter, Mistral, Together, and Cohere. Local-first by default. Automatic failover chain with health checks, retry, and circuit breaker.</div>
       </div>
       <div class="feature-card fade-up">
         <div class="feat-icon">📡</div>
-        <div class="feat-title">20+ Channels</div>
-        <div class="feat-desc">Telegram, Discord, Slack, REST/SSE, WebSocket, Matrix, WhatsApp, IRC, ntfy, email and more — each feature-flagged, zero binary bloat.</div>
+        <div class="feat-title">8 Channels</div>
+        <div class="feat-desc">CLI, REST/SSE, Telegram, Discord, Slack, WebSocket, Matrix, and Webhook — each feature-flagged, zero binary bloat when unused.</div>
       </div>
       <div class="feature-card fade-up">
         <div class="feat-icon">🔄</div>
         <div class="feat-title">Hot-Reload Config</div>
-        <div class="feat-desc">Edit <code style="color:var(--rust)">ironclaw.toml</code> while running. Changes apply in under a second via <code style="color:var(--rust)">arc-swap</code> — no restart, no downtime.</div>
+        <div class="feat-desc">Edit <code style="color:var(--rust)">ironclaw.toml</code> while running. File watcher detects changes instantly via <code style="color:var(--rust)">notify</code> + <code style="color:var(--rust)">arc-swap</code> — no restart, no downtime.</div>
       </div>
       <div class="feature-card fade-up">
         <div class="feat-icon">📦</div>
         <div class="feat-title">Embeddable Library</div>
-        <div class="feat-desc">Use <code style="color:var(--rust)">ironclaw-core</code> as a library in your Tauri, Axum, or CLI app. Trait-based design means any component is swappable.</div>
+        <div class="feat-desc">Use <code style="color:var(--rust)">ironclaw-core</code> as a library in your Tauri, Axum, or CLI app. 9 built-in tools, SQLite + Redis memory, and trait-based design means any component is swappable.</div>
       </div>
     </div>
   </div>
@@ -488,75 +488,82 @@
   <div class="container">
     <div class="section-label">Benchmarks</div>
     <h2 class="section-title">How we stack up</h2>
-    <p class="section-sub">Compared against PicoClaw (Go), ZeroClaw and ZeptoClaw (Rust).</p>
+    <p class="section-sub">Compared against popular Python agent frameworks. IronClaw is a compiled Rust binary — resource differences reflect fundamentally different architectures.</p>
 
     <div class="compare-wrap">
       <table>
         <thead>
           <tr>
             <th></th>
-            <th>PicoClaw<br><small style="font-weight:400;text-transform:none">Go</small></th>
-            <th>ZeroClaw<br><small style="font-weight:400;text-transform:none">Rust</small></th>
-            <th>ZeptoClaw<br><small style="font-weight:400;text-transform:none">Rust</small></th>
-            <th class="th-iron">IronClaw<span class="best-badge">BEST</span><br><small style="font-weight:400;text-transform:none;color:var(--rust)">Rust</small></th>
+            <th>LangChain<br><small style="font-weight:400;text-transform:none">Python</small></th>
+            <th>CrewAI<br><small style="font-weight:400;text-transform:none">Python</small></th>
+            <th>AutoGen<br><small style="font-weight:400;text-transform:none">Python</small></th>
+            <th class="th-iron">IronClaw<br><small style="font-weight:400;text-transform:none;color:var(--rust)"><span class="best-badge">RUST</span></small></th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>Binary size</td>
-            <td>~8 MB</td>
-            <td>~3.4 MB</td>
-            <td>~5 MB</td>
-            <td class="col-iron win">≤ 2 MB 🏆</td>
+            <td>Install size</td>
+            <td>~600 MB</td>
+            <td>~350 MB</td>
+            <td>~400 MB</td>
+            <td class="col-iron win">4.4 MB 🏆</td>
           </tr>
           <tr>
             <td>Cold startup</td>
-            <td>&lt; 1s</td>
-            <td>&lt; 10ms</td>
-            <td>~50ms</td>
-            <td class="col-iron win">&lt; 5ms 🏆</td>
+            <td>~2–5s</td>
+            <td>~1–3s</td>
+            <td>~2–4s</td>
+            <td class="col-iron win">~57ms 🏆</td>
           </tr>
           <tr>
             <td>RAM at idle</td>
-            <td>&lt; 10 MB</td>
-            <td>&lt; 5 MB</td>
-            <td>~6 MB</td>
-            <td class="col-iron win">&lt; 3 MB 🏆</td>
+            <td>~80 MB</td>
+            <td>~50 MB</td>
+            <td>~60 MB</td>
+            <td class="col-iron win">~7.5 MB 🏆</td>
+          </tr>
+          <tr>
+            <td>Runtime</td>
+            <td>Python 3.9+</td>
+            <td>Python 3.10+</td>
+            <td>Python 3.10+</td>
+            <td class="col-iron win">None (static binary) 🏆</td>
           </tr>
           <tr>
             <td>LLM Providers</td>
-            <td>12</td>
-            <td>22</td>
-            <td>16</td>
-            <td class="col-iron win">∞ plugins 🏆</td>
-          </tr>
-          <tr>
-            <td>Channels</td>
-            <td>16</td>
-            <td>11</td>
-            <td>11</td>
-            <td class="col-iron win">20+ 🏆</td>
+            <td>100+ integrations</td>
+            <td>via LiteLLM</td>
+            <td>via Extensions</td>
+            <td class="col-iron">8 built-in</td>
           </tr>
           <tr>
             <td>Agent swarms</td>
-            <td><span class="cross">✗</span></td>
-            <td><span style="color:#f59e0b">partial</span></td>
-            <td><span class="cross">✗</span></td>
-            <td class="col-iron"><span class="check">✓</span></td>
+            <td><span style="color:#f59e0b">via LangGraph</span></td>
+            <td><span class="check">✓</span></td>
+            <td><span class="check">✓</span></td>
+            <td class="col-iron"><span class="check">✓</span> 5 patterns</td>
           </tr>
           <tr>
             <td>WASM plugins</td>
             <td><span class="cross">✗</span></td>
             <td><span class="cross">✗</span></td>
             <td><span class="cross">✗</span></td>
-            <td class="col-iron"><span class="check">✓</span></td>
+            <td class="col-iron"><span style="color:#f59e0b">in progress</span></td>
           </tr>
           <tr>
-            <td>Library crate</td>
+            <td>Edge / IoT deploy</td>
             <td><span class="cross">✗</span></td>
             <td><span class="cross">✗</span></td>
             <td><span class="cross">✗</span></td>
-            <td class="col-iron"><span class="check">✓</span></td>
+            <td class="col-iron"><span class="check">✓</span> ARM, RISC-V</td>
+          </tr>
+          <tr>
+            <td>Embeddable library</td>
+            <td><span class="check">✓</span> pip package</td>
+            <td><span class="check">✓</span> pip package</td>
+            <td><span class="check">✓</span> pip package</td>
+            <td class="col-iron"><span class="check">✓</span> Cargo crate</td>
           </tr>
           <tr>
             <td>Hot-reload config</td>
@@ -636,7 +643,7 @@
 
 <span style="color:var(--green)">✅</span> <span style="color:var(--muted)">Provider: ollama — healthy</span>
 <span style="color:var(--green)">✅</span> <span style="color:var(--muted)">Channel: telegram — connected</span>
-<span style="color:var(--rust)">🦀</span> <span style="color:var(--muted)">Startup: 3.7ms</span>
+<span style="color:var(--rust)">🦀</span> <span style="color:var(--muted)">Startup: 57ms</span>
           </div>
         </div>
         <div class="code-block">

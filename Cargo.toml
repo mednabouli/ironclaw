@@ -48,7 +48,7 @@ ironclaw-channels  = { version = "0.1.1", path = "crates/ironclaw-channels" }
 ironclaw-agents    = { version = "0.1.1", path = "crates/ironclaw-agents" }
 
 # Async runtime
-tokio        = { version = "1", features = ["full"] }
+tokio        = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "io-util", "io-std", "signal", "fs", "net", "process"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures      = "0.3"
 async-trait  = "0.1"
@@ -63,7 +63,7 @@ thiserror    = "2"
 
 # Observability
 tracing             = "0.1"
-tracing-subscriber  = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber  = { version = "0.3", features = ["env-filter"] }
 tracing-opentelemetry = "0.28"
 opentelemetry       = "0.27"
 opentelemetry_sdk   = { version = "0.27", features = ["rt-tokio"] }

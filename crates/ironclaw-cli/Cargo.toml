@@ -20,11 +20,11 @@ doc  = false
 [dependencies]
 ironclaw-core      = { workspace = true }
 ironclaw-config    = { workspace = true }
-ironclaw-providers = { workspace = true, features = ["all"] }
+ironclaw-providers = { workspace = true }
 ironclaw-memory    = { workspace = true }
 ironclaw-tools     = { workspace = true }
 ironclaw-wasm      = { workspace = true }
-ironclaw-channels  = { workspace = true, features = ["rest","cli"] }
+ironclaw-channels  = { workspace = true, features = ["cli"] }
 ironclaw-agents    = { workspace = true }
 
 tokio        = { workspace = true }
@@ -39,7 +39,9 @@ indicatif    = "0.17"
 reqwest      = { workspace = true }
 
 [features]
-default = []
+default = ["rest"]
+rest    = ["ironclaw-channels/rest"]
+all-providers = ["ironclaw-providers/all"]
 otel    = ["tracing-opentelemetry", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp"]
 
 [dependencies.tracing-opentelemetry]

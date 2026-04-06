@@ -23,6 +23,20 @@ impl GroqProvider {
             "https://api.groq.com/openai",
         ))
     }
+
+    /// Create a new Groq provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self(OpenAIProvider::with_client(
+            client,
+            api_key,
+            model,
+            "https://api.groq.com/openai",
+        ))
+    }
 }
 
 #[async_trait::async_trait]

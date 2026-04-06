@@ -1,6 +1,9 @@
 pub mod inmemory;
+#[cfg(feature = "redis-backend")]
 pub mod redis;
+#[cfg(feature = "sqlite")]
 pub mod sqlite;
+#[cfg(feature = "sqlite")]
 pub mod vector;
 
 use std::sync::Arc;
@@ -8,8 +11,11 @@ use std::sync::Arc;
 pub use inmemory::InMemoryStore;
 use ironclaw_config::IronClawConfig;
 use ironclaw_core::{MemoryStore, VectorStore};
+#[cfg(feature = "redis-backend")]
 pub use redis::RedisStore;
+#[cfg(feature = "sqlite")]
 pub use sqlite::SqliteStore;
+#[cfg(feature = "sqlite")]
 pub use vector::SqliteVectorStore;
 
 /// Build a [`MemoryStore`] from the loaded configuration.
@@ -20,6 +26,7 @@ pub use vector::SqliteVectorStore;
 /// - anything else → ephemeral [`InMemoryStore`]
 pub async fn from_config(cfg: &IronClawConfig) -> anyhow::Result<Arc<dyn MemoryStore>> {
     match cfg.memory.backend.as_str() {
+        #[cfg(feature = "sqlite")]
         "sqlite" => {
             let path = expand_tilde(&cfg.memory.path);
             // Ensure parent directory exists
@@ -29,6 +36,7 @@ pub async fn from_config(cfg: &IronClawConfig) -> anyhow::Result<Arc<dyn MemoryS
             let store = SqliteStore::new(&path, cfg.memory.max_history).await?;
             Ok(Arc::new(store))
         }
+        #[cfg(feature = "redis-backend")]
         "redis" => {
             let rc = &cfg.memory.redis;
             let store = RedisStore::new(&rc.url, &rc.key_prefix, rc.max_history).await?;
@@ -42,6 +50,7 @@ pub async fn from_config(cfg: &IronClawConfig) -> anyhow::Result<Arc<dyn MemoryS
 ///
 /// The vector store uses the same SQLite path as the memory store
 /// (with a `_vectors` suffix) to keep embeddings co-located.
+#[cfg(feature = "sqlite")]
 pub async fn vector_store_from_config(
     cfg: &IronClawConfig,
 ) -> anyhow::Result<Arc<dyn VectorStore>> {

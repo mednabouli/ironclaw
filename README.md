@@ -4,8 +4,14 @@
 [![CI](https://github.com/mednabouli/ironclaw/actions/workflows/ci.yml/badge.svg)](https://github.com/mednabouli/ironclaw/actions)
 [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
 
-> **Ultra-lightweight AI agent framework in Rust.**  
-> One binary. Any LLM. Every channel. Agent swarms. WASM plugins.
+> **Ultra-lightweight AI agent framework in Rust.**
+> One binary. 8 LLM providers. 8 channels. Agent swarms. WASM plugins. ~4.4 MB.
+
+| Metric | Value |
+|--------|-------|
+| Binary size | **4.4 MB** (default features, `--release`) |
+| Cold startup | **~57 ms** (macOS arm64, measured) |
+| RAM at idle | **~7.5 MB** RSS |
 
 ## Quick Start
 
@@ -47,13 +53,77 @@ curl -X POST http://localhost:8080/v1/chat \
 |-------|-------------|
 | `ironclaw-core`      | Traits + types (zero business logic) |
 | `ironclaw-config`    | TOML config parser with env var expansion |
-| `ironclaw-providers` | Ollama, Claude, OpenAI, Groq providers |
-| `ironclaw-memory`    | In-memory session store (SQLite in Phase 4) |
+| `ironclaw-providers` | 8 LLM providers: Ollama, Anthropic, OpenAI, Groq, Mistral, Together, Cohere, OpenRouter |
+| `ironclaw-memory`    | In-memory + SQLite persistent memory, vector store |
 | `ironclaw-tools`     | Shell, DateTime built-in tools + registry |
-| `ironclaw-wasm`      | WASM plugin sandbox (stub for Phase 6) |
-| `ironclaw-channels`  | REST/SSE + CLI channels |
-| `ironclaw-agents`    | ReAct agent, AgentContext, MessageHandler |
+| `ironclaw-wasm`      | WASM plugin system: manifest, installer, capability sandbox |
+| `ironclaw-channels`  | CLI, REST/SSE, Telegram, Discord, Slack, WebSocket, Matrix, Webhook |
+| `ironclaw-agents`    | ReAct agent loop, AgentContext, event bus |
 | `ironclaw-cli`       | Binary entry point (clap CLI) |
+
+## Feature Flags
+
+IronClaw uses Cargo feature flags to keep the default binary small. Only what you need gets compiled in.
+
+### CLI binary (`ironclaw-cli`)
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `rest` | **yes** | Enables the REST/SSE HTTP channel |
+| `all-providers` | no | Compiles all 8 providers (default: Ollama + Anthropic + OpenAI) |
+| `otel` | no | OpenTelemetry tracing export |
+
+```bash
+# Default build — Ollama/Anthropic/OpenAI + REST + CLI channels
+cargo build --release -p ironclaw-cli
+
+# Minimal build — CLI channel only, no REST server (~4.2 MB)
+cargo build --release -p ironclaw-cli --no-default-features
+
+# Full build — all 8 providers + REST
+cargo build --release -p ironclaw-cli --features all-providers
+```
+
+### Providers (`ironclaw-providers`)
+
+| Feature | Default | Provider |
+|---------|---------|----------|
+| `ollama` | **yes** | Ollama (local models) |
+| `anthropic` | **yes** | Anthropic Claude |
+| `openai` | **yes** | OpenAI GPT |
+| `groq` | no | Groq |
+| `mistral` | no | Mistral |
+| `together` | no | Together AI |
+| `cohere` | no | Cohere |
+| `openrouter` | no | OpenRouter |
+| `all` | no | All of the above |
+
+### Channels (`ironclaw-channels`)
+
+| Feature | Default | Channel |
+|---------|---------|---------|
+| `cli` | **yes** | Interactive terminal |
+| `rest` | **yes** | REST/SSE HTTP API (axum) |
+| `prometheus` | **yes** | Prometheus metrics endpoint |
+| `telegram` | no | Telegram bot (teloxide) |
+| `discord` | no | Discord bot (serenity) |
+| `slack` | no | Slack bot |
+| `websocket` | no | WebSocket server |
+| `webhook` | no | Incoming webhook handler |
+| `matrix` | no | Matrix chat |
+
+### Memory (`ironclaw-memory`)
+
+| Feature | Default | Backend |
+|---------|---------|---------|
+| `sqlite` | **yes** | SQLite persistent storage + vector store |
+| `redis-backend` | no | Redis memory backend |
+
+## Architecture
+
+All providers share a single `reqwest::Client` instance, saving ~300 KB RAM and ~2 ms startup per additional provider. The SQLite connection pool is set to 1 connection to minimize idle memory.
+
+For the full architecture diagram, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Cross-Compile
 

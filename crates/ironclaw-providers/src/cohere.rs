@@ -24,6 +24,20 @@ impl CohereProvider {
             "https://api.cohere.com/compatibility/v1",
         ))
     }
+
+    /// Create a new Cohere provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self(OpenAIProvider::with_client(
+            client,
+            api_key,
+            model,
+            "https://api.cohere.com/compatibility/v1",
+        ))
+    }
 }
 
 #[async_trait::async_trait]

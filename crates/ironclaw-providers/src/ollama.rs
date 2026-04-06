@@ -12,12 +12,26 @@ pub struct OllamaProvider {
 }
 
 impl OllamaProvider {
+    /// Create a new Ollama provider, building its own HTTP client.
     pub fn new(base_url: impl Into<String>, model: impl Into<String>) -> Self {
-        Self {
-            client: reqwest::Client::builder()
+        Self::with_client(
+            reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(300))
                 .build()
                 .unwrap_or_default(),
+            base_url,
+            model,
+        )
+    }
+
+    /// Create a new Ollama provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        base_url: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self {
+            client,
             base_url: base_url.into().trim_end_matches('/').to_string(),
             model: model.into(),
         }

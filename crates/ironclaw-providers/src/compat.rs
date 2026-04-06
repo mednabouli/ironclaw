@@ -44,6 +44,22 @@ impl CompatProvider {
             provider_name,
         }
     }
+
+    /// Create a new OpenAI-compatible provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        name: impl Into<String>,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+        base_url: impl Into<String>,
+    ) -> Self {
+        let name_string = name.into();
+        let provider_name: &'static str = Box::leak(name_string.into_boxed_str());
+        Self {
+            inner: OpenAIProvider::with_client(client, api_key, model, base_url),
+            provider_name,
+        }
+    }
 }
 
 #[async_trait::async_trait]

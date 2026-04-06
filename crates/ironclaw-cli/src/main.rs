@@ -4,7 +4,9 @@ use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use ironclaw_agents::{AgentContext, AgentHandler};
-use ironclaw_channels::{CliChannel, RestChannel};
+use ironclaw_channels::CliChannel;
+#[cfg(feature = "rest")]
+use ironclaw_channels::RestChannel;
 use ironclaw_config::{ConfigWatcher, IronClawConfig};
 use ironclaw_core::{Channel, CompletionRequest, Message};
 use serde::{Deserialize, Serialize};
@@ -215,6 +217,7 @@ async fn cmd_start(cfg: IronClawConfig, config_path: &std::path::Path) -> anyhow
 
     for name in &cfg.channels.enabled {
         match name.as_str() {
+            #[cfg(feature = "rest")]
             "rest" => {
                 let ch = RestChannel::new(cfg.channels.rest.clone());
                 let handler = Arc::clone(&handler);
@@ -224,6 +227,10 @@ async fn cmd_start(cfg: IronClawConfig, config_path: &std::path::Path) -> anyhow
                     }
                 });
                 handles.push(h);
+            }
+            #[cfg(not(feature = "rest"))]
+            "rest" => {
+                warn!("REST channel requested but not compiled. Rebuild with --features rest");
             }
             "cli" => {
                 let ch = CliChannel::default();

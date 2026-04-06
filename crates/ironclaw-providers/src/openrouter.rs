@@ -26,6 +26,19 @@ impl OpenRouterProvider {
             "https://openrouter.ai/api",
         ))
     }
+    /// Create a new OpenRouter provider with a shared HTTP client.
+    pub fn with_client(
+        client: reqwest::Client,
+        api_key: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self(OpenAIProvider::with_client(
+            client,
+            api_key,
+            model,
+            "https://openrouter.ai/api",
+        ))
+    }
 }
 
 #[async_trait::async_trait]

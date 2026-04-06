@@ -13,8 +13,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default   = ["rest", "cli"]
-rest      = ["axum", "tower-http"]
+default   = ["rest", "cli", "prometheus"]
+rest      = ["axum", "tower-http", "prometheus"]
 cli       = []
 telegram  = ["teloxide"]
 discord   = ["serenity"]
@@ -22,6 +22,7 @@ slack     = ["axum", "tower-http", "reqwest"]
 websocket = ["axum"]
 webhook   = ["axum", "tower-http"]
 matrix    = ["reqwest"]
+prometheus = ["metrics", "metrics-exporter-prometheus"]
 
 [dependencies]
 ironclaw-core   = { workspace = true }
@@ -45,8 +46,8 @@ dashmap  = { workspace = true }
 uuid   = { workspace = true }
 chrono = { workspace = true }
 regex-lite = { workspace = true }
-metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
+metrics = { workspace = true, optional = true }
+metrics-exporter-prometheus = { workspace = true, optional = true }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }

@@ -40,7 +40,7 @@ impl SqliteVectorStore {
             .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
 
         let pool = SqlitePoolOptions::new()
-            .max_connections(4)
+            .max_connections(1)
             .connect_with(opts)
             .await?;
 
