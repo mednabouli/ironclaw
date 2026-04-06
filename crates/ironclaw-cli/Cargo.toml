@@ -42,6 +42,7 @@ reqwest      = { workspace = true }
 default = ["rest"]
 rest    = ["ironclaw-channels/rest"]
 all-providers = ["ironclaw-providers/all"]
+wasm-runtime = ["ironclaw-wasm/runtime", "ironclaw-wasm/sha256", "ironclaw-tools/wasm-runtime"]
 otel    = ["tracing-opentelemetry", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp"]
 
 [dependencies.tracing-opentelemetry]

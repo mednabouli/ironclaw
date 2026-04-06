@@ -85,6 +85,10 @@ teloxide = { version = "0.17", default-features = false, features = ["rustls", "
 # Discord
 serenity = { version = "0.12", default-features = false, features = ["client", "gateway", "model", "rustls_backend"] }
 
+# WASM runtime
+wasmtime = { version = "41", default-features = false, features = ["component-model", "cranelift", "runtime", "std"] }
+sha2     = "0.10"
+
 # Concurrency / data structures
 dashmap = "6"
 uuid    = { version = "1", features = ["v4", "serde"] }

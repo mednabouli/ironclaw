@@ -26,3 +26,8 @@ reqwest     = { workspace = true }
 dashmap     = { workspace = true }
 uuid        = { workspace = true }
 urlencoding = "2"
+ironclaw-wasm = { workspace = true, optional = true }
+
+[features]
+default = []
+wasm-runtime = ["ironclaw-wasm/runtime"]

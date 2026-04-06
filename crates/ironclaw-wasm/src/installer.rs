@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use tracing::{info, warn};
+use tracing::info;
+#[cfg(not(feature = "sha256"))]
+use tracing::warn;
 
 use crate::manifest::{PluginManifest, PluginRegistry};
 
@@ -170,12 +172,21 @@ fn url_to_plugin_name(url: &str) -> String {
 }
 
 /// Compute SHA-256 hex digest of bytes.
+#[cfg(feature = "sha256")]
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::Digest;
+    let hash = sha2::Sha256::digest(data);
+    hash.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// Compute SHA-256 hex digest of bytes.
 ///
 /// Stub implementation — returns an empty string and logs a warning.
-/// A full implementation would use the `sha2` crate or `ring`.
+/// Enable the `sha256` feature for real verification.
+#[cfg(not(feature = "sha256"))]
 fn sha256_hex(data: &[u8]) -> String {
     let _ = data;
-    warn!("SHA-256 verification requires the sha2 crate; skipping in stub mode");
+    warn!("SHA-256 verification requires the `sha256` feature; skipping in stub mode");
     String::new()
 }
 

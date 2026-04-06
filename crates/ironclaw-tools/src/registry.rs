@@ -69,6 +69,33 @@ impl ToolRegistry {
                 other => tracing::warn!("Unknown tool in config: {other}"),
             }
         }
+
+        // Load WASM plugins from the default plugin directory
+        #[cfg(feature = "wasm-runtime")]
+        {
+            let plugin_dir = ironclaw_wasm::installer::default_plugin_dir();
+            match ironclaw_wasm::runtime::WasmRuntime::new() {
+                Ok(rt) => {
+                    let wasm_tools = ironclaw_wasm::scan_plugins_with_runtime(&plugin_dir, &rt);
+                    for tool in wasm_tools {
+                        reg.register(Arc::new(tool));
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to create WASM runtime: {e}");
+                }
+            }
+        }
+
+        #[cfg(all(not(feature = "wasm-runtime"), feature = "ironclaw-wasm"))]
+        {
+            let plugin_dir = ironclaw_wasm::installer::default_plugin_dir();
+            let wasm_tools = ironclaw_wasm::scan_plugins(&plugin_dir);
+            for tool in wasm_tools {
+                reg.register(Arc::new(tool));
+            }
+        }
+
         reg
     }
 }
