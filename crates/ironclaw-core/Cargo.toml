@@ -11,6 +11,10 @@ readme      = "README.md"
 keywords    = ["ai", "agent", "llm", "framework", "async"]
 categories  = ["asynchronous", "api-bindings"]
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 async-trait  = { workspace = true }
 serde        = { workspace = true }

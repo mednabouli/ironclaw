@@ -2,6 +2,9 @@
 
 > Describes what is stable, what is experimental, and what guarantees IronClaw
 > provides between releases.
+>
+> See also: [`VERSIONING.md`](VERSIONING.md) for the full SemVer policy and
+> deprecation process, [`MIGRATION.md`](MIGRATION.md) for upgrading from 0.x.
 
 ---
 
@@ -95,3 +98,26 @@ cargo install cargo-semver-checks
 # Compare against the last published version
 cargo semver-checks check-release
 ```
+
+---
+
+## What Counts as a Breaking Change
+
+The following changes are **always** breaking and require a major bump
+(or a minor bump + `CHANGELOG.md` entry during 0.x):
+
+- Removing a public type, trait, or function
+- Changing the signature of a trait method
+- Removing a variant from a `#[non_exhaustive]` enum *(adding is non-breaking)*
+- Removing a public field from a struct
+- Changing a type's `Serialize`/`Deserialize` wire format
+- Raising the MSRV
+
+The following are **non-breaking** changes:
+
+- Adding a new variant to a `#[non_exhaustive]` enum
+- Adding a new field to a `#[non_exhaustive]` struct (if it has a default)
+- Adding a new trait method with a default implementation
+- Adding a new module or re-export
+- Relaxing a trait bound
+- Bug fixes that change observable but undocumented behaviour

@@ -8,18 +8,74 @@ use crate::types::*;
 // ── Provider ──────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait Provider: Send + Sync + 'static {
+    /// Returns the provider's unique display name (e.g. `"openai"`, `"anthropic"`).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let provider: &dyn Provider = &my_provider;
+    /// assert_eq!(provider.name(), "openai");
+    /// ```
     fn name(&self) -> &'static str;
+
+    /// Whether this provider supports streaming responses.
+    ///
+    /// Returns `true` by default.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// if provider.supports_streaming() {
+    ///     let stream = provider.stream(req).await?;
+    /// }
+    /// ```
     fn supports_streaming(&self) -> bool {
         true
     }
+
+    /// Whether this provider supports tool/function calling.
+    ///
+    /// Returns `true` by default.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// if provider.supports_tools() {
+    ///     req = req.with_tools(tool_schemas);
+    /// }
+    /// ```
     fn supports_tools(&self) -> bool {
         true
     }
+
+    /// Whether this provider supports vision (image) inputs.
+    ///
+    /// Returns `false` by default.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// if provider.supports_vision() {
+    ///     // attach image content to the request
+    /// }
+    /// ```
     fn supports_vision(&self) -> bool {
         false
     }
 
     /// Send a completion request and return the full response.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{CompletionRequest, Provider};
+    ///
+    /// let req = CompletionRequest::builder("gpt-4o")
+    ///     .user("Explain Rust traits in one sentence.")
+    ///     .build();
+    /// let resp = provider.complete(req).await?;
+    /// println!("{}", resp.text());
+    /// ```
     ///
     /// # Errors
     ///
@@ -36,6 +92,22 @@ pub trait Provider: Send + Sync + 'static {
 
     /// Send a completion request and return a streaming response.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use futures::StreamExt;
+    /// use ironclaw_core::{CompletionRequest, Provider};
+    ///
+    /// let req = CompletionRequest::builder("gpt-4o")
+    ///     .user("Hello!")
+    ///     .build();
+    /// let mut stream = provider.stream(req).await?;
+    /// while let Some(chunk) = stream.next().await {
+    ///     let chunk = chunk?;
+    ///     print!("{}", chunk.delta);
+    /// }
+    /// ```
+    ///
     /// # Errors
     ///
     /// Returns the same error variants as [`Provider::complete`].
@@ -46,6 +118,15 @@ pub trait Provider: Send + Sync + 'static {
         -> Result<BoxStream<StreamChunk>, ProviderError>;
 
     /// Verify the provider is reachable and the credentials are valid.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// match provider.health_check().await {
+    ///     Ok(()) => println!("{} is healthy", provider.name()),
+    ///     Err(e) => eprintln!("{} health check failed: {e}", provider.name()),
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
@@ -58,9 +139,27 @@ pub trait Provider: Send + Sync + 'static {
 // ── Channel ───────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait Channel: Send + Sync + 'static {
+    /// Returns the channel's display name (e.g. `"rest"`, `"telegram"`).
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let ch: &dyn Channel = &my_channel;
+    /// tracing::info!("Starting channel: {}", ch.name());
+    /// ```
     fn name(&self) -> &'static str;
 
     /// Bind the transport and begin accepting inbound messages.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use std::sync::Arc;
+    /// use ironclaw_core::Channel;
+    ///
+    /// let handler: Arc<dyn MessageHandler> = Arc::new(my_handler);
+    /// channel.start(handler).await?;
+    /// ```
     ///
     /// # Errors
     ///
@@ -70,6 +169,16 @@ pub trait Channel: Send + Sync + 'static {
     async fn start(&self, handler: Arc<dyn MessageHandler>) -> Result<(), ChannelError>;
 
     /// Deliver an outbound message to the given target.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{ChannelId, OutboundMessage, Channel};
+    ///
+    /// let target = ChannelId::Rest { session_id: session.clone() };
+    /// let msg = OutboundMessage::text("Hello!");
+    /// channel.send(&target, msg).await?;
+    /// ```
     ///
     /// # Errors
     ///
@@ -81,6 +190,13 @@ pub trait Channel: Send + Sync + 'static {
     async fn send(&self, to: &ChannelId, message: OutboundMessage) -> Result<(), ChannelError>;
 
     /// Gracefully shut down the channel transport.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// channel.stop().await?;
+    /// tracing::info!("Channel stopped");
+    /// ```
     ///
     /// # Errors
     ///
@@ -97,6 +213,20 @@ pub trait MessageHandler: Send + Sync + 'static {
     /// Returns `Ok(None)` when the handler intentionally produces no reply
     /// (e.g. a middleware that filters the message).
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{InboundMessage, MessageHandler};
+    ///
+    /// let msg = InboundMessage::builder()
+    ///     .session_id("sess-1")
+    ///     .text("Hello!")
+    ///     .build();
+    /// if let Some(reply) = handler.handle(msg).await? {
+    ///     println!("Reply: {}", reply.as_str());
+    /// }
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`HandlerError::Agent`] — the underlying agent failed.
@@ -108,6 +238,26 @@ pub trait MessageHandler: Send + Sync + 'static {
     ///
     /// The default implementation wraps [`MessageHandler::handle`] into a
     /// single `TokenDelta` + `Done` sequence.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use futures::StreamExt;
+    /// use ironclaw_core::{InboundMessage, MessageHandler, StreamEvent};
+    ///
+    /// let msg = InboundMessage::builder()
+    ///     .session_id("sess-1")
+    ///     .text("Hello!")
+    ///     .build();
+    /// let mut stream = handler.handle_stream(msg).await?;
+    /// while let Some(event) = stream.next().await {
+    ///     match event? {
+    ///         StreamEvent::TokenDelta { delta } => print!("{delta}"),
+    ///         StreamEvent::Done { .. } => break,
+    ///         _ => {}
+    ///     }
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
@@ -134,11 +284,50 @@ pub trait MessageHandler: Send + Sync + 'static {
 // ── Tool ──────────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait Tool: Send + Sync + 'static {
+    /// Returns the tool's unique name used in function-calling payloads.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let tool: &dyn Tool = &my_tool;
+    /// assert_eq!(tool.name(), "get_datetime");
+    /// ```
     fn name(&self) -> &str;
+
+    /// Returns a human-readable description of what the tool does.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// println!("Tool: {} — {}", tool.name(), tool.description());
+    /// ```
     fn description(&self) -> &str;
+
+    /// Returns the JSON Schema describing the tool's parameters.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::Tool;
+    ///
+    /// let schema = tool.schema();
+    /// assert_eq!(schema.name, tool.name());
+    /// assert!(schema.parameters.get("properties").is_some());
+    /// ```
     fn schema(&self) -> ToolSchema;
 
     /// Execute the tool with the given JSON parameters.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use serde_json::json;
+    /// use ironclaw_core::Tool;
+    ///
+    /// let params = json!({ "timezone": "UTC" });
+    /// let result = tool.invoke(params).await?;
+    /// println!("{}", result);
+    /// ```
     ///
     /// # Errors
     ///
@@ -157,6 +346,16 @@ pub trait Tool: Send + Sync + 'static {
 pub trait MemoryStore: Send + Sync + 'static {
     /// Append a message to the session history.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{MemoryStore, Message, Role, SessionId};
+    ///
+    /// let session = SessionId::new();
+    /// let msg = Message::new(Role::User, "Hello, agent!");
+    /// store.push(&session, msg).await?;
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`MemoryError::Storage`] — the backend could not persist the message.
@@ -165,6 +364,18 @@ pub trait MemoryStore: Send + Sync + 'static {
     async fn push(&self, session: &SessionId, msg: Message) -> Result<(), MemoryError>;
 
     /// Retrieve the last `limit` messages for a session, oldest-first.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{MemoryStore, SessionId};
+    ///
+    /// let session = SessionId::new();
+    /// let history = store.history(&session, 50).await?;
+    /// for msg in &history {
+    ///     println!("[{:?}] {}", msg.role, msg.content);
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
@@ -177,6 +388,15 @@ pub trait MemoryStore: Send + Sync + 'static {
 
     /// Delete all messages for a session.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{MemoryStore, SessionId};
+    ///
+    /// let session = SessionId::new();
+    /// store.clear(&session).await?;
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`MemoryError::Storage`] — the backend could not delete the data.
@@ -185,6 +405,15 @@ pub trait MemoryStore: Send + Sync + 'static {
 
     /// List all session IDs that have stored messages, most-recently-active first.
     /// Returns an empty vec if the backend does not support listing.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::MemoryStore;
+    ///
+    /// let sessions = store.sessions().await?;
+    /// println!("{} active sessions", sessions.len());
+    /// ```
     ///
     /// # Errors
     ///
@@ -197,6 +426,17 @@ pub trait MemoryStore: Send + Sync + 'static {
     /// Full-text search across all stored messages.
     /// Returns up to `limit` matching [`SearchHit`]s, most-recent first.
     /// Returns an empty vec if the backend does not support search.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::MemoryStore;
+    ///
+    /// let hits = store.search("deployment issue", 10).await?;
+    /// for hit in &hits {
+    ///     println!("[{}] {}", hit.session_id, hit.content);
+    /// }
+    /// ```
     ///
     /// # Errors
     ///
@@ -211,10 +451,44 @@ pub trait MemoryStore: Send + Sync + 'static {
 // ── Agent ─────────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait Agent: Send + Sync + 'static {
+    /// Returns the agent's unique identifier.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::Agent;
+    ///
+    /// tracing::info!(agent_id = %agent.id(), "Agent ready");
+    /// ```
     fn id(&self) -> &AgentId;
+
+    /// Returns the agent's role in a multi-agent system.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{Agent, AgentRole};
+    ///
+    /// match agent.role() {
+    ///     AgentRole::Primary => println!("This is the primary agent"),
+    ///     _ => {}
+    /// }
+    /// ```
     fn role(&self) -> AgentRole;
 
     /// Execute an agent task and return the final output.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{Agent, AgentTask};
+    ///
+    /// let task = AgentTask::builder()
+    ///     .instruction("Summarize the document")
+    ///     .build();
+    /// let output = agent.run(task).await?;
+    /// println!("Result: {}", output.text);
+    /// ```
     ///
     /// # Errors
     ///
@@ -230,9 +504,31 @@ pub trait Agent: Send + Sync + 'static {
 // ── AgentBus ──────────────────────────────────────────────────────────────
 #[async_trait]
 pub trait AgentBus: Send + Sync + 'static {
+    /// Register an agent so it can receive dispatched tasks.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use std::sync::Arc;
+    /// use ironclaw_core::AgentBus;
+    ///
+    /// let agent: Arc<dyn Agent> = Arc::new(my_agent);
+    /// bus.register(agent);
+    /// ```
     fn register(&self, agent: Arc<dyn Agent>);
 
     /// Dispatch a task to the agent identified by `id`.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::{AgentBus, AgentTask};
+    ///
+    /// let task = AgentTask::builder()
+    ///     .instruction("Translate to French")
+    ///     .build();
+    /// let output = bus.dispatch(&agent_id, task).await?;
+    /// ```
     ///
     /// # Errors
     ///
@@ -253,6 +549,21 @@ pub trait VectorStore: Send + Sync + 'static {
     /// `id` is a caller-chosen unique identifier. If the id already exists
     /// the entry is replaced.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use serde_json::json;
+    /// use ironclaw_core::VectorStore;
+    ///
+    /// let embedding = vec![0.1, 0.2, 0.3]; // from an embedding model
+    /// store.upsert(
+    ///     "doc-42",
+    ///     "Rust is a systems programming language.",
+    ///     &embedding,
+    ///     json!({ "source": "wiki" }),
+    /// ).await?;
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`MemoryError::Storage`] — the backend could not persist the entry.
@@ -270,6 +581,18 @@ pub trait VectorStore: Send + Sync + 'static {
     ///
     /// Returns results sorted by descending cosine similarity score.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::VectorStore;
+    ///
+    /// let query_vec = vec![0.1, 0.2, 0.3]; // from an embedding model
+    /// let hits = store.search(&query_vec, 5).await?;
+    /// for hit in &hits {
+    ///     println!("score={:.3} text={}", hit.score, hit.text);
+    /// }
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`MemoryError::Storage`] — the backend could not execute the search.
@@ -282,6 +605,14 @@ pub trait VectorStore: Send + Sync + 'static {
 
     /// Delete an entry by id.
     ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::VectorStore;
+    ///
+    /// store.delete("doc-42").await?;
+    /// ```
+    ///
     /// # Errors
     ///
     /// - [`MemoryError::Storage`] — the backend could not delete the entry.
@@ -290,6 +621,15 @@ pub trait VectorStore: Send + Sync + 'static {
     async fn delete(&self, id: &str) -> Result<(), MemoryError>;
 
     /// Return the number of stored embeddings.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use ironclaw_core::VectorStore;
+    ///
+    /// let n = store.count().await?;
+    /// println!("{n} vectors in store");
+    /// ```
     ///
     /// # Errors
     ///
