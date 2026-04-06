@@ -73,6 +73,11 @@ impl Tool for FileReadTool {
                 .as_str()
                 .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
 
+            // Reject null bytes — prevents null byte injection in C-backed syscalls
+            if path_str.contains('\0') {
+                anyhow::bail!("Path contains null byte");
+            }
+
             let max_bytes = params["max_bytes"].as_u64().unwrap_or(65_536) as usize;
 
             // Resolve to canonical path to prevent traversal attacks
@@ -158,6 +163,14 @@ mod tests {
     async fn rejects_disallowed_path() {
         let tool = FileReadTool::new(vec![PathBuf::from("/nonexistent_allowed")]);
         let result = tool.invoke(json!({"path": "/etc/hosts"})).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_null_byte_in_path() {
+        let dir = std::env::temp_dir();
+        let tool = FileReadTool::new(vec![dir]);
+        let result = tool.invoke(json!({"path": "/tmp/evil\0.txt"})).await;
         assert!(result.is_err());
     }
 }

@@ -30,13 +30,30 @@ version    = 2
 db-path    = "~/.cargo/advisory-db"
 db-urls    = ["https://github.com/rustsec/advisory-db"]
 ignore     = [
-    # rustls-webpki 0.102.8 CRL matching — transitive via serenity 0.12.5 (latest; no upstream fix)
+    # RUSTSEC-2026-0049: rustls-webpki 0.102.8 CRL matching vulnerability
+    #   Impact: Low — CRL revocation checking may miss certain patterns.
+    #   Root cause: transitive dep via serenity 0.12.5 (latest release).
+    #   Remediation: blocked on serenity upgrading to rustls-webpki ≥0.103.
+    #   Reviewed: 2025-04-06. Re-check when serenity 0.13 releases.
     "RUSTSEC-2026-0049",
-    # time 0.3.36 stack exhaustion — pinned for MSRV 1.86 (0.3.47 fix requires Rust 1.88)
+
+    # RUSTSEC-2026-0009: time 0.3.36 stack exhaustion via recursive formatting
+    #   Impact: Low — requires attacker-controlled time format strings (not exposed in IronClaw).
+    #   Root cause: time 0.3.47 fix requires Rust 1.88; our MSRV is 1.86.
+    #   Remediation: bump MSRV to 1.88 when ecosystem catches up, then upgrade time.
+    #   Reviewed: 2025-04-06.
     "RUSTSEC-2026-0009",
-    # instant unmaintained — transitive via notify 7 (no upstream fix)
+
+    # RUSTSEC-2024-0384: instant crate unmaintained (use std::time::Instant instead)
+    #   Impact: None — `instant` is a transitive dep via notify 7; not directly used.
+    #   Remediation: blocked on notify 8 dropping `instant`. No security impact.
+    #   Reviewed: 2025-04-06.
     "RUSTSEC-2024-0384",
-    # number_prefix unmaintained — transitive via indicatif 0.17
+
+    # RUSTSEC-2025-0119: number_prefix crate unmaintained
+    #   Impact: None — transitive dep via indicatif 0.17; display formatting only.
+    #   Remediation: blocked on indicatif 0.18 switching to alternative. No security impact.
+    #   Reviewed: 2025-04-06.
     "RUSTSEC-2025-0119",
 ]
 

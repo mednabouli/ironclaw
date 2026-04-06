@@ -1,8 +1,8 @@
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use axum::{
-    extract::{Json, Request, State},
+    extract::{ConnectInfo, Json, Request, State},
     http::{HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{
@@ -12,6 +12,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use dashmap::DashMap;
 use ironclaw_config::RestConfig;
 use ironclaw_core::{
     Channel, ChannelError, ChannelId, InboundMessage, MessageHandler, OutboundMessage,
@@ -20,10 +21,61 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tracing::{error, info, warn};
 
+/// Maximum authentication failures per IP before returning 429.
+const MAX_AUTH_FAILURES: u32 = 5;
+/// Window in which auth failures are counted before reset.
+const AUTH_FAILURE_WINDOW: Duration = Duration::from_secs(300);
+
+/// Tracks per-IP authentication failure counts with sliding window.
+#[derive(Clone)]
+struct AuthRateLimiter {
+    /// Map of IP → (failure_count, window_start)
+    failures: Arc<DashMap<String, (u32, std::time::Instant)>>,
+}
+
+impl AuthRateLimiter {
+    fn new() -> Self {
+        Self {
+            failures: Arc::new(DashMap::new()),
+        }
+    }
+
+    /// Record an authentication failure for the given IP.
+    /// Returns the current failure count.
+    fn record_failure(&self, ip: &str) -> u32 {
+        let now = std::time::Instant::now();
+        let mut entry = self.failures.entry(ip.to_string()).or_insert((0, now));
+        let (count, window_start) = entry.value_mut();
+
+        // Reset window if expired
+        if now.duration_since(*window_start) > AUTH_FAILURE_WINDOW {
+            *count = 0;
+            *window_start = now;
+        }
+
+        *count += 1;
+        *count
+    }
+
+    /// Check if the IP has exceeded the failure limit.
+    fn is_blocked(&self, ip: &str) -> bool {
+        let now = std::time::Instant::now();
+        if let Some(entry) = self.failures.get(ip) {
+            let (count, window_start) = entry.value();
+            if now.duration_since(*window_start) > AUTH_FAILURE_WINDOW {
+                return false; // Window expired
+            }
+            return *count >= MAX_AUTH_FAILURES;
+        }
+        false
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     handler: Arc<dyn MessageHandler>,
     auth_token: String,
+    auth_limiter: AuthRateLimiter,
 }
 
 #[derive(Deserialize)]
@@ -46,14 +98,31 @@ struct HealthResponse {
 
 /// Middleware that enforces Bearer token auth when `auth_token` is configured.
 /// Passes through without checking when `auth_token` is empty.
+/// Returns 429 Too Many Requests after [`MAX_AUTH_FAILURES`] failed attempts
+/// from the same IP within [`AUTH_FAILURE_WINDOW`].
 async fn require_auth(
     State(state): State<AppState>,
+    connect_info: Option<ConnectInfo<SocketAddr>>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Response {
     if state.auth_token.is_empty() {
         return next.run(request).await;
+    }
+
+    let client_ip = connect_info
+        .map(|ci| ci.0.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    // Check if this IP is currently rate-limited
+    if state.auth_limiter.is_blocked(&client_ip) {
+        warn!(ip = %client_ip, "REST: rate-limited auth attempt (too many failures)");
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            "Too many authentication failures. Try again later.",
+        )
+            .into_response();
     }
 
     let expected = format!("Bearer {}", state.auth_token);
@@ -63,7 +132,8 @@ async fn require_auth(
         .unwrap_or("");
 
     if provided != expected {
-        warn!("REST: rejected request with invalid or missing Authorization header");
+        let failures = state.auth_limiter.record_failure(&client_ip);
+        warn!(ip = %client_ip, failures, "REST: rejected request with invalid or missing Authorization header");
         return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
     }
 
@@ -190,6 +260,7 @@ impl Channel for RestChannel {
             let state = AppState {
                 handler,
                 auth_token: self.config.auth_token.clone(),
+                auth_limiter: AuthRateLimiter::new(),
             };
 
             let app = Router::new()
@@ -209,7 +280,11 @@ impl Channel for RestChannel {
             info!(addr = %addr, "REST channel listening");
 
             let listener = tokio::net::TcpListener::bind(addr).await?;
-            axum::serve(listener, app).await?;
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await?;
             Ok::<(), anyhow::Error>(())
         })
         .await
@@ -235,6 +310,7 @@ mod tests {
         let state = AppState {
             handler: Arc::new(crate::tests::NoopHandler),
             auth_token: auth_token.to_string(),
+            auth_limiter: AuthRateLimiter::new(),
         };
         Router::new()
             .route("/v1/chat", post(chat_handler))
@@ -319,6 +395,7 @@ mod tests {
         let state = AppState {
             handler: Arc::new(StreamTestHandler),
             auth_token: String::new(),
+            auth_limiter: AuthRateLimiter::new(),
         };
         let app = Router::new()
             .route("/v1/chat/stream", post(stream_chat_handler))
@@ -375,6 +452,7 @@ mod tests {
         let state = AppState {
             handler: Arc::new(StreamTestHandler),
             auth_token: String::new(),
+            auth_limiter: AuthRateLimiter::new(),
         };
         let app = Router::new()
             .route("/v1/chat/stream", post(stream_chat_handler))
@@ -431,5 +509,38 @@ mod tests {
             events[1].1["usage"].is_null(),
             "streaming usage should be null"
         );
+    }
+
+    #[test]
+    fn auth_rate_limiter_blocks_after_max_failures() {
+        let limiter = AuthRateLimiter::new();
+        let ip = "192.168.1.100";
+
+        // Should not be blocked initially
+        assert!(!limiter.is_blocked(ip));
+
+        // Record MAX_AUTH_FAILURES failures
+        for _ in 0..MAX_AUTH_FAILURES {
+            limiter.record_failure(ip);
+        }
+
+        // Should now be blocked
+        assert!(limiter.is_blocked(ip));
+
+        // Different IP should not be affected
+        assert!(!limiter.is_blocked("10.0.0.1"));
+    }
+
+    #[test]
+    fn auth_rate_limiter_allows_below_threshold() {
+        let limiter = AuthRateLimiter::new();
+        let ip = "192.168.1.200";
+
+        for _ in 0..(MAX_AUTH_FAILURES - 1) {
+            limiter.record_failure(ip);
+        }
+
+        // One below the limit — should still be allowed
+        assert!(!limiter.is_blocked(ip));
     }
 }

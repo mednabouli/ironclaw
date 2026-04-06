@@ -77,6 +77,11 @@ impl Tool for FileWriteTool {
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing 'path' parameter"))?;
 
+        // Reject null bytes — prevents null byte injection in C-backed syscalls
+        if path_str.contains('\0') {
+            anyhow::bail!("Path contains null byte");
+        }
+
         let content = params["content"]
             .as_str()
             .ok_or_else(|| anyhow::anyhow!("Missing 'content' parameter"))?;
@@ -95,10 +100,11 @@ impl Tool for FileWriteTool {
             .await
             .map_err(|e| anyhow::anyhow!("Cannot resolve directory '{}': {e}", parent.display()))?;
 
-        let canonical_path = canonical_parent.join(
-            path.file_name()
-                .ok_or_else(|| anyhow::anyhow!("Invalid file name in '{path_str}'"))?,
-        );
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid file name in '{path_str}'"))?;
+
+        let canonical_path = canonical_parent.join(file_name);
 
         if !self.is_allowed(&canonical_path) {
             warn!(path = %canonical_path.display(), "File write blocked: outside allowed directories");
@@ -106,6 +112,17 @@ impl Tool for FileWriteTool {
                 "Access denied: '{}' is not within allowed directories",
                 path_str
             );
+        }
+
+        // If the file already exists, check for symlinks that could escape the sandbox
+        if let Ok(metadata) = tokio::fs::symlink_metadata(&canonical_path).await {
+            if metadata.file_type().is_symlink() {
+                warn!(path = %canonical_path.display(), "File write blocked: target is a symlink");
+                anyhow::bail!(
+                    "Access denied: '{}' is a symlink (potential sandbox escape)",
+                    path_str
+                );
+            }
         }
 
         let bytes_written = content.len();
@@ -204,6 +221,58 @@ mod tests {
         let result = tool
             .invoke(json!({
                 "path": "/tmp/should_not_write.txt",
+                "content": "nope"
+            }))
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn rejects_symlink_target() {
+        let dir = std::env::temp_dir();
+        let tool = FileWriteTool::new(vec![dir.clone()]);
+
+        // Create a symlink pointing outside the allowed directory
+        let link_path = dir.join("ironclaw_test_symlink_write");
+        let target_path = dir.join("ironclaw_test_symlink_target");
+
+        // Clean up any leftover from previous runs
+        tokio::fs::remove_file(&link_path).await.ok();
+        tokio::fs::remove_file(&target_path).await.ok();
+
+        // Create the symlink
+        #[cfg(unix)]
+        tokio::fs::symlink(&target_path, &link_path).await.unwrap();
+        #[cfg(not(unix))]
+        {
+            // Skip on non-unix
+            return;
+        }
+
+        let result = tool
+            .invoke(json!({
+                "path": link_path.display().to_string(),
+                "content": "should fail"
+            }))
+            .await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("symlink"),
+            "Error should mention symlink: {err}"
+        );
+
+        // Cleanup
+        tokio::fs::remove_file(&link_path).await.ok();
+    }
+
+    #[tokio::test]
+    async fn rejects_null_byte_in_path() {
+        let dir = std::env::temp_dir();
+        let tool = FileWriteTool::new(vec![dir]);
+        let result = tool
+            .invoke(json!({
+                "path": "/tmp/evil\0.txt",
                 "content": "nope"
             }))
             .await;

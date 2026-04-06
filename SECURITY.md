@@ -17,7 +17,7 @@ Once v1.0.0 is released, the two most recent minor versions will receive securit
 
 ### Preferred: GitHub Private Advisory
 
-1. Go to the [Security tab](https://github.com/yourusername/ironclaw/security/advisories)
+1. Go to the [Security tab](https://github.com/mednabouli/ironclaw/security/advisories)
 2. Click **"Report a vulnerability"**
 3. Fill in the details — include reproduction steps, affected versions, and impact assessment
 

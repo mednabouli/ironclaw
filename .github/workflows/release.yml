@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write  # Required for cosign keyless signing
 
 jobs:
   build:
@@ -107,11 +108,29 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-sbom
+        run: cargo install cargo-sbom
+
+      - name: Generate SBOM (SPDX)
+        run: cargo sbom --output-format spdx_json_2_3 > ironclaw-sbom.spdx.json
+
       - name: Download all artifacts
         uses: actions/download-artifact@v7
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign release artifacts with cosign (keyless)
+        run: |
+          for file in artifacts/**/*.tar.gz artifacts/**/*.zip; do
+            [ -f "$file" ] || continue
+            cosign sign-blob --yes --output-signature "${file}.sig" --output-certificate "${file}.cert" "$file"
+          done
 
       - name: Extract changelog section for this version
         id: changelog
@@ -135,6 +154,9 @@ jobs:
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
             artifacts/**/*.sha256
+            artifacts/**/*.sig
+            artifacts/**/*.cert
+            ironclaw-sbom.spdx.json
           generate_release_notes: false
 
   publish-crates:
