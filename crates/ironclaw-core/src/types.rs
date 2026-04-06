@@ -112,19 +112,14 @@ pub enum StopReason {
 
 // ── Response format ────────────────────────────────────────────────────────
 /// Controls the output format of the provider response.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ResponseFormat {
     /// Default text output.
+    #[default]
     Text,
     /// Request JSON-mode output (provider will return a valid JSON object).
     JsonObject,
-}
-
-impl Default for ResponseFormat {
-    fn default() -> Self {
-        Self::Text
-    }
 }
 
 // ── Completion request / response ─────────────────────────────────────────
@@ -320,9 +315,10 @@ pub enum AgentRole {
 /// State machine for agent lifecycle tracking.
 ///
 /// Transitions: `Idle → Running → Waiting → Running → Done | Failed`
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AgentState {
     /// Agent is idle, waiting for a task.
+    #[default]
     Idle,
     /// Agent is actively processing a task.
     Running,
@@ -332,12 +328,6 @@ pub enum AgentState {
     Done,
     /// Agent failed with an error message.
     Failed(String),
-}
-
-impl Default for AgentState {
-    fn default() -> Self {
-        Self::Idle
-    }
 }
 
 impl std::fmt::Display for AgentState {
