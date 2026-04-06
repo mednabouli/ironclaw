@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use ironclaw_core::{InboundMessage, MessageHandler, OutboundMessage};
+use ironclaw_core::{BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent};
 use tracing::{debug, error};
 
 use crate::{context::AgentContext, react::ReActAgent};
@@ -52,5 +52,43 @@ impl MessageHandler for AgentHandler {
                 )))
             }
         }
+    }
+
+    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+        let span = tracing::info_span!("handle_stream", session = %msg.session_id, channel = ?msg.channel);
+        let _g = span.enter();
+
+        debug!(content = %msg.content, "Handling stream message");
+
+        // Persist the user message up front
+        let _ = self
+            .ctx
+            .memory
+            .push(&msg.session_id, Message::user(&msg.content))
+            .await;
+
+        let agent = ReActAgent::new(self.ctx.clone());
+        let task = ironclaw_core::AgentTask::new(msg.content);
+
+        let event_stream = agent.stream_with_history(msg.session_id.clone(), task);
+
+        // Wrap the stream to persist the assistant reply when Done arrives
+        let memory = self.ctx.memory.clone();
+        let session_id = msg.session_id;
+        let wrapped = tokio_stream::StreamExt::map(event_stream, move |event| {
+            let memory = memory.clone();
+            let session_id = session_id.clone();
+            if let Ok(StreamEvent::Done { .. }) = &event {
+                // Persistence is best-effort; fire and forget
+                tokio::spawn(async move {
+                    let _ = memory
+                        .push(&session_id, Message::assistant("[streamed]"))
+                        .await;
+                });
+            }
+            event
+        });
+
+        Ok(Box::pin(wrapped))
     }
 }

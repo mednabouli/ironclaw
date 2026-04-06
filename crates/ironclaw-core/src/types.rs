@@ -152,11 +152,79 @@ impl CompletionResponse {
     }
 }
 
+// ── Streaming tool call delta ─────────────────────────────────────────────
+/// An incremental piece of a tool call received during streaming.
+/// Providers emit these across multiple chunks; the consumer accumulates
+/// them to reconstruct a full `ToolCall`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolCallDelta {
+    /// Index of the tool call in the current response (providers may
+    /// issue multiple tool calls in parallel).
+    pub index: usize,
+    /// Set on the first delta for this tool call; `None` on subsequent deltas.
+    pub id: Option<String>,
+    /// Set on the first delta for this tool call; `None` on subsequent deltas.
+    pub name: Option<String>,
+    /// Incremental JSON fragment of the arguments string.
+    pub arguments_delta: String,
+}
+
 // ── Stream chunk ──────────────────────────────────────────────────────────
+/// A single chunk from a provider's streaming response.
+/// Contains text deltas, optional tool call deltas, and a stop reason
+/// on the final chunk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamChunk {
+    /// Incremental text content.
     pub delta: String,
+    /// Whether this is the final chunk in the stream.
     pub done: bool,
+    /// Incremental tool call information (empty when no tool calls).
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCallDelta>,
+    /// Set on the final chunk to indicate why generation stopped.
+    #[serde(default)]
+    pub stop_reason: Option<StopReason>,
+}
+
+// ── Stream events (SSE-level) ─────────────────────────────────────────────
+/// High-level events emitted during a streaming agent interaction.
+/// These are sent to clients over SSE and represent the full lifecycle
+/// of a streamed response including tool call execution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamEvent {
+    /// An incremental text token from the model.
+    TokenDelta {
+        /// The text fragment.
+        delta: String,
+    },
+    /// A tool call is about to be executed.
+    ToolCallStart {
+        /// Unique ID for this tool call.
+        id: String,
+        /// Name of the tool being invoked.
+        name: String,
+        /// The parsed arguments for the tool.
+        arguments: serde_json::Value,
+    },
+    /// A tool call has finished executing.
+    ToolCallEnd {
+        /// The tool call ID (matches the preceding `ToolCallStart`).
+        id: String,
+        /// The result returned by the tool.
+        result: serde_json::Value,
+    },
+    /// The stream has completed successfully.
+    Done {
+        /// Token usage for the full interaction.
+        usage: TokenUsage,
+    },
+    /// An error occurred during streaming.
+    Error {
+        /// Human-readable error description.
+        message: String,
+    },
 }
 
 // ── Tool schema ───────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 pub mod registry;
+pub mod sse;
 
 #[cfg(feature = "ollama")]
 pub mod ollama;
