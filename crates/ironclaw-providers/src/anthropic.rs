@@ -4,7 +4,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use ironclaw_core::*;
 use serde_json::{json, Value};
-use tokio_stream::StreamExt;
 
 /// Anthropic Claude provider (claude-3-5-sonnet, claude-3-7-sonnet, claude-opus-4, etc.).
 ///
@@ -202,46 +201,7 @@ impl Provider for AnthropicProvider {
             .await?
             .error_for_status()?;
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<anyhow::Result<StreamChunk>>(64);
-        tokio::spawn(async move {
-            let mut byte_stream = response.bytes_stream();
-            let mut buf = String::new();
-            while let Some(chunk) = byte_stream.next().await {
-                match chunk {
-                    Err(e) => {
-                        let _ = tx.send(Err(anyhow::anyhow!(e))).await;
-                        break;
-                    }
-                    Ok(bytes) => {
-                        buf.push_str(&String::from_utf8_lossy(&bytes));
-                        while let Some(pos) = buf.find('\n') {
-                            let line: String = buf.drain(..=pos).collect();
-                            let line = line.trim();
-                            if let Some(data) = line.strip_prefix("data: ") {
-                                if data == "message_stop" || data.contains("\"message_stop\"") {
-                                    let _ = tx
-                                        .send(Ok(StreamChunk {
-                                            delta: String::new(),
-                                            done: true,
-                                        }))
-                                        .await;
-                                    return;
-                                }
-                                if let Ok(v) = serde_json::from_str::<Value>(data) {
-                                    if v["type"] == "content_block_delta" {
-                                        let delta =
-                                            v["delta"]["text"].as_str().unwrap_or("").to_string();
-                                        let _ =
-                                            tx.send(Ok(StreamChunk { delta, done: false })).await;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)))
+        Ok(crate::sse::parse_anthropic_sse_stream(response))
     }
 
     async fn health_check(&self) -> anyhow::Result<()> {

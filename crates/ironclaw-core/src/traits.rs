@@ -40,7 +40,25 @@ pub trait Channel: Send + Sync + 'static {
 // ── MessageHandler ────────────────────────────────────────────────────────
 #[async_trait]
 pub trait MessageHandler: Send + Sync + 'static {
+    /// Handle an inbound message and return a complete response.
     async fn handle(&self, msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>>;
+
+    /// Handle an inbound message and return a stream of events.
+    /// The default implementation wraps `handle()` into a single
+    /// `TokenDelta` + `Done` sequence.
+    async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
+        let result = self.handle(msg).await?;
+        let events: Vec<anyhow::Result<StreamEvent>> = match result {
+            Some(out) => vec![
+                Ok(StreamEvent::TokenDelta {
+                    delta: out.as_str().to_string(),
+                }),
+                Ok(StreamEvent::Done { usage: None }),
+            ],
+            None => vec![Ok(StreamEvent::Done { usage: None })],
+        };
+        Ok(Box::pin(futures::stream::iter(events)))
+    }
 }
 
 // ── Tool ──────────────────────────────────────────────────────────────────

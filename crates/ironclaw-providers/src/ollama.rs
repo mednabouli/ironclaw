@@ -4,7 +4,6 @@ use anyhow::Context;
 use async_trait::async_trait;
 use ironclaw_core::*;
 use serde_json::{json, Value};
-use tokio_stream::StreamExt;
 
 pub struct OllamaProvider {
     client: reqwest::Client,
@@ -146,42 +145,7 @@ impl Provider for OllamaProvider {
             .context("Ollama stream error")?
             .error_for_status()?;
 
-        let (tx, rx) = tokio::sync::mpsc::channel::<anyhow::Result<StreamChunk>>(64);
-
-        tokio::spawn(async move {
-            let mut byte_stream = response.bytes_stream();
-            let mut buf = String::new();
-
-            while let Some(chunk) = byte_stream.next().await {
-                match chunk {
-                    Err(e) => {
-                        let _ = tx.send(Err(anyhow::anyhow!(e))).await;
-                        break;
-                    }
-                    Ok(bytes) => {
-                        buf.push_str(&String::from_utf8_lossy(&bytes));
-                        while let Some(pos) = buf.find('\n') {
-                            let line: String = buf.drain(..=pos).collect();
-                            let line = line.trim();
-                            if line.is_empty() {
-                                continue;
-                            }
-                            if let Ok(v) = serde_json::from_str::<Value>(line) {
-                                let delta =
-                                    v["message"]["content"].as_str().unwrap_or("").to_string();
-                                let done = v["done"].as_bool().unwrap_or(false);
-                                let _ = tx.send(Ok(StreamChunk { delta, done })).await;
-                                if done {
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        });
-
-        Ok(Box::pin(tokio_stream::wrappers::ReceiverStream::new(rx)))
+        Ok(crate::sse::parse_ollama_ndjson_stream(response))
     }
 
     async fn health_check(&self) -> anyhow::Result<()> {

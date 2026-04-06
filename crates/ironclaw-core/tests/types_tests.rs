@@ -75,3 +75,90 @@ fn inbound_message_cli_helper() {
     assert_eq!(m.content, "hello");
     assert!(matches!(m.channel, ChannelId::Cli));
 }
+
+#[test]
+fn tool_call_delta_roundtrips_json() {
+    let d = ToolCallDelta {
+        index: 0,
+        id: Some("call-1".into()),
+        name: Some("shell".into()),
+        arguments_delta: r#"{"cmd":"ls"#.into(),
+    };
+    let j = serde_json::to_string(&d).unwrap();
+    let d2: ToolCallDelta = serde_json::from_str(&j).unwrap();
+    assert_eq!(d2.index, 0);
+    assert_eq!(d2.id.as_deref(), Some("call-1"));
+    assert_eq!(d2.arguments_delta, r#"{"cmd":"ls"#);
+}
+
+#[test]
+fn stream_chunk_defaults_empty_tool_calls() {
+    let json = r#"{"delta":"hi","done":false}"#;
+    let chunk: StreamChunk = serde_json::from_str(json).unwrap();
+    assert!(chunk.tool_calls.is_empty());
+    assert!(chunk.stop_reason.is_none());
+}
+
+#[test]
+fn stream_chunk_with_tool_calls_roundtrips() {
+    let chunk = StreamChunk {
+        delta: String::new(),
+        done: false,
+        tool_calls: vec![ToolCallDelta {
+            index: 0,
+            id: Some("tc-1".into()),
+            name: Some("search".into()),
+            arguments_delta: "{}".into(),
+        }],
+        stop_reason: None,
+    };
+    let j = serde_json::to_string(&chunk).unwrap();
+    let chunk2: StreamChunk = serde_json::from_str(&j).unwrap();
+    assert_eq!(chunk2.tool_calls.len(), 1);
+    assert_eq!(chunk2.tool_calls[0].name.as_deref(), Some("search"));
+}
+
+#[test]
+fn stream_event_token_delta_serde() {
+    let evt = StreamEvent::TokenDelta {
+        delta: "hello".into(),
+    };
+    let j = serde_json::to_string(&evt).unwrap();
+    assert!(j.contains(r#""type":"token_delta""#));
+    assert!(j.contains(r#""delta":"hello""#));
+}
+
+#[test]
+fn stream_event_tool_call_start_serde() {
+    let evt = StreamEvent::ToolCallStart {
+        id: "call-1".into(),
+        name: "shell".into(),
+        arguments: serde_json::json!({"command": "ls"}),
+    };
+    let j = serde_json::to_string(&evt).unwrap();
+    assert!(j.contains(r#""type":"tool_call_start""#));
+}
+
+#[test]
+fn stream_event_done_serde() {
+    let evt = StreamEvent::Done {
+        usage: Some(TokenUsage {
+            prompt_tokens: 10,
+            completion_tokens: 5,
+            total_tokens: 15,
+        }),
+    };
+    let j = serde_json::to_string(&evt).unwrap();
+    assert!(j.contains(r#""type":"done""#));
+    assert!(j.contains(r#""total_tokens":15"#));
+}
+
+#[test]
+fn stream_event_error_serde() {
+    let evt = StreamEvent::Error {
+        message: "provider timeout".into(),
+    };
+    let j = serde_json::to_string(&evt).unwrap();
+    assert!(j.contains(r#""type":"error""#));
+    assert!(j.contains("provider timeout"));
+}

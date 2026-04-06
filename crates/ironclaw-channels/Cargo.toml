@@ -20,6 +20,7 @@ serde_json   = { workspace = true }
 anyhow       = { workspace = true }
 tracing      = { workspace = true }
 futures      = { workspace = true }
+tokio-stream = { workspace = true }
 
 axum         = { version = "0.7", optional = true }
 tower-http   = { version = "0.5", features = ["cors"], optional = true }
