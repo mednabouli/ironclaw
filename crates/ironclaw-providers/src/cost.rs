@@ -1,7 +1,7 @@
 //! Per-request token cost calculation based on provider pricing.
 //!
 //! Provides a [`CostCalculator`] that maps provider+model to pricing
-//! and computes the dollar cost of a [`CompletionResponse`] from its
+//! and computes the dollar cost of a [`ironclaw_core::CompletionResponse`] from its
 //! [`TokenUsage`].
 
 use ironclaw_core::TokenUsage;

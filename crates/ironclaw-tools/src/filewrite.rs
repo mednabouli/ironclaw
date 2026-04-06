@@ -1,6 +1,6 @@
 //! File write tool — write or append to files sandboxed to allowed directories.
 //!
-//! Enforces the same path-traversal protection as [`FileReadTool`].
+//! Enforces the same path-traversal protection as [`crate::fileread::FileReadTool`].
 
 use std::path::{Path, PathBuf};
 
