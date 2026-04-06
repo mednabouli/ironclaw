@@ -53,13 +53,9 @@ pub trait MessageHandler: Send + Sync + 'static {
                 Ok(StreamEvent::TokenDelta {
                     delta: out.as_str().to_string(),
                 }),
-                Ok(StreamEvent::Done {
-                    usage: TokenUsage::default(),
-                }),
+                Ok(StreamEvent::Done { usage: None }),
             ],
-            None => vec![Ok(StreamEvent::Done {
-                usage: TokenUsage::default(),
-            })],
+            None => vec![Ok(StreamEvent::Done { usage: None })],
         };
         Ok(Box::pin(futures::stream::iter(events)))
     }

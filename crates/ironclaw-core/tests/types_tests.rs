@@ -142,11 +142,11 @@ fn stream_event_tool_call_start_serde() {
 #[test]
 fn stream_event_done_serde() {
     let evt = StreamEvent::Done {
-        usage: TokenUsage {
+        usage: Some(TokenUsage {
             prompt_tokens: 10,
             completion_tokens: 5,
             total_tokens: 15,
-        },
+        }),
     };
     let j = serde_json::to_string(&evt).unwrap();
     assert!(j.contains(r#""type":"done""#));

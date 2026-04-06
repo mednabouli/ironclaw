@@ -46,14 +46,9 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
                         };
 
                         if data == "[DONE]" {
-                            let _ = tx
-                                .send(Ok(StreamChunk {
-                                    delta: String::new(),
-                                    done: true,
-                                    tool_calls: vec![],
-                                    stop_reason: Some(StopReason::EndTurn),
-                                }))
-                                .await;
+                            // Pure terminator — do not emit a chunk.
+                            // The real stop_reason was already sent on the
+                            // preceding chunk that carried finish_reason.
                             return;
                         }
 
@@ -174,18 +169,6 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                         };
 
                         let Ok(v) = serde_json::from_str::<Value>(data) else {
-                            // Some lines are bare strings like "message_stop"
-                            if data == "message_stop" || data.contains("\"message_stop\"") {
-                                let _ = tx
-                                    .send(Ok(StreamChunk {
-                                        delta: String::new(),
-                                        done: true,
-                                        tool_calls: vec![],
-                                        stop_reason: Some(StopReason::EndTurn),
-                                    }))
-                                    .await;
-                                return;
-                            }
                             continue;
                         };
 
@@ -247,14 +230,24 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                             .unwrap_or("")
                                             .to_string();
                                         if !partial.is_empty() {
+                                            // Look up id/name from active_tools so
+                                            // consumers can associate deltas with
+                                            // the correct tool call.
+                                            let (id, name) = active_tools
+                                                .iter()
+                                                .find(|(idx, _, _)| *idx == index)
+                                                .map(|(_, id, name)| {
+                                                    (Some(id.clone()), Some(name.clone()))
+                                                })
+                                                .unwrap_or((None, None));
                                             let _ = tx
                                                 .send(Ok(StreamChunk {
                                                     delta: String::new(),
                                                     done: false,
                                                     tool_calls: vec![ToolCallDelta {
                                                         index,
-                                                        id: None,
-                                                        name: None,
+                                                        id,
+                                                        name,
                                                         arguments_delta: partial,
                                                     }],
                                                     stop_reason: None,
@@ -296,14 +289,8 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
 
                             // ── Stream termination ──
                             "message_stop" => {
-                                let _ = tx
-                                    .send(Ok(StreamChunk {
-                                        delta: String::new(),
-                                        done: true,
-                                        tool_calls: vec![],
-                                        stop_reason: Some(StopReason::EndTurn),
-                                    }))
-                                    .await;
+                                // Pure terminator — the real stop_reason was
+                                // already emitted via `message_delta`.
                                 return;
                             }
 
@@ -521,6 +508,9 @@ mod tests {
         assert!(tool_deltas.len() >= 2);
         assert_eq!(tool_deltas[0].id.as_deref(), Some("toolu_1"));
         assert_eq!(tool_deltas[0].name.as_deref(), Some("shell"));
+        // input_json_delta chunks now carry id/name from active_tools lookup
+        assert_eq!(tool_deltas[1].id.as_deref(), Some("toolu_1"));
+        assert_eq!(tool_deltas[1].name.as_deref(), Some("shell"));
         assert_eq!(final_stop, Some(StopReason::ToolUse));
     }
 

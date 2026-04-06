@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use anyhow::Context;
 use ironclaw_core::*;
@@ -175,8 +175,6 @@ impl ReActAgent {
             None => ctx.tools.all_schemas(),
         };
 
-        let total_usage = TokenUsage::default();
-
         for iteration in 0..MAX_ITERATIONS {
             debug!(iteration, "Streaming ReAct iteration");
 
@@ -196,7 +194,7 @@ impl ReActAgent {
 
             // Accumulate text and tool call deltas from the stream
             let mut full_text = String::new();
-            let mut tool_call_map: HashMap<usize, (String, String, String)> = HashMap::new();
+            let mut tool_call_map: BTreeMap<usize, (String, String, String)> = BTreeMap::new();
             let mut stop: Option<StopReason> = None;
 
             while let Some(chunk_result) = stream.next().await {
@@ -281,18 +279,14 @@ impl ReActAgent {
                 }
             } else {
                 // Final answer — done
-                info!(
-                    agent_id,
-                    tokens = total_usage.total_tokens,
-                    "Streaming ReAct complete"
-                );
-                let _ = tx.send(Ok(StreamEvent::Done { usage: total_usage })).await;
+                info!(agent_id, "Streaming ReAct complete");
+                let _ = tx.send(Ok(StreamEvent::Done { usage: None })).await;
                 return Ok(());
             }
         }
 
         warn!("Max iterations ({MAX_ITERATIONS}) reached in streaming ReAct");
-        let _ = tx.send(Ok(StreamEvent::Done { usage: total_usage })).await;
+        let _ = tx.send(Ok(StreamEvent::Done { usage: None })).await;
         Ok(())
     }
 }

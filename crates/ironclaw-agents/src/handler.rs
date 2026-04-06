@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use ironclaw_core::{
-    BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent,
+    BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent, ToolCall,
 };
+use tokio::sync::Mutex;
 use tracing::{debug, error};
 
 use crate::{context::AgentContext, react::ReActAgent};
@@ -75,19 +78,50 @@ impl MessageHandler for AgentHandler {
 
         let event_stream = agent.stream_with_history(msg.session_id.clone(), task);
 
-        // Wrap the stream to persist the assistant reply when Done arrives
+        // Accumulate the real assistant content while streaming
+        let accumulated_text = Arc::new(Mutex::new(String::new()));
+        let accumulated_tools = Arc::new(Mutex::new(Vec::<ToolCall>::new()));
+
         let memory = self.ctx.memory.clone();
         let session_id = msg.session_id;
         let wrapped = tokio_stream::StreamExt::map(event_stream, move |event| {
             let memory = memory.clone();
             let session_id = session_id.clone();
-            if let Ok(StreamEvent::Done { .. }) = &event {
-                // Persistence is best-effort; fire and forget
-                tokio::spawn(async move {
-                    let _ = memory
-                        .push(&session_id, Message::assistant("[streamed]"))
-                        .await;
-                });
+            let text = accumulated_text.clone();
+            let tools = accumulated_tools.clone();
+
+            match &event {
+                Ok(StreamEvent::TokenDelta { delta }) => {
+                    let delta = delta.clone();
+                    tokio::spawn(async move {
+                        text.lock().await.push_str(&delta);
+                    });
+                }
+                Ok(StreamEvent::ToolCallStart {
+                    id,
+                    name,
+                    arguments,
+                }) => {
+                    let tc = ToolCall {
+                        id: id.clone(),
+                        name: name.clone(),
+                        arguments: arguments.clone(),
+                    };
+                    tokio::spawn(async move {
+                        tools.lock().await.push(tc);
+                    });
+                }
+                Ok(StreamEvent::Done { .. }) | Ok(StreamEvent::Error { .. }) => {
+                    // Persist the real assistant message with accumulated content
+                    tokio::spawn(async move {
+                        let content = text.lock().await.clone();
+                        let tool_calls = tools.lock().await.clone();
+                        let mut assistant_msg = Message::assistant(content);
+                        assistant_msg.tool_calls = tool_calls;
+                        let _ = memory.push(&session_id, assistant_msg).await;
+                    });
+                }
+                _ => {}
             }
             event
         });

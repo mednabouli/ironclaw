@@ -217,8 +217,9 @@ pub enum StreamEvent {
     },
     /// The stream has completed successfully.
     Done {
-        /// Token usage for the full interaction.
-        usage: TokenUsage,
+        /// Token usage for the full interaction, if available.
+        /// Streaming completions may not report usage.
+        usage: Option<TokenUsage>,
     },
     /// An error occurred during streaming.
     Error {

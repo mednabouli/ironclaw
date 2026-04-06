@@ -139,8 +139,17 @@ async fn stream_chat_handler(
                     ironclaw_core::StreamEvent::Done { .. } => "done",
                     ironclaw_core::StreamEvent::Error { .. } => "error",
                 };
-                let json = serde_json::to_string(&event).unwrap_or_default();
-                Ok(Event::default().event(event_type).data(json))
+                match serde_json::to_string(&event) {
+                    Ok(json) => Ok(Event::default().event(event_type).data(json)),
+                    Err(e) => {
+                        error!(error = %e, event_type, "SSE event serialization failed");
+                        let err_json = serde_json::json!({
+                            "type": "error",
+                            "message": format!("Internal serialization error: {e}")
+                        });
+                        Ok(Event::default().event("error").data(err_json.to_string()))
+                    }
+                }
             }
             Err(e) => {
                 let json = serde_json::json!({ "type": "error", "message": e.to_string() });
@@ -342,7 +351,7 @@ mod tests {
                     delta: "Hello".into(),
                 }),
                 Ok(ironclaw_core::StreamEvent::Done {
-                    usage: ironclaw_core::TokenUsage::default(),
+                    usage: None,
                 }),
             ];
             Ok(Box::pin(futures::stream::iter(events)))
@@ -406,6 +415,6 @@ mod tests {
         // Second event: done
         assert_eq!(events[1].0, "done");
         assert_eq!(events[1].1["type"], "done");
-        assert!(events[1].1["usage"].is_object());
+        assert!(events[1].1["usage"].is_null(), "streaming usage should be null");
     }
 }
