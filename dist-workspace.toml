@@ -1,0 +1,50 @@
+# cargo-dist configuration
+# https://opensource.axo.dev/cargo-dist/book/reference/config.html
+#
+# This file is the source of truth for cargo-dist. Run `cargo dist init`
+# to regenerate the CI workflow from this config.
+
+[dist]
+# Target triples for release builds
+targets = [
+  "x86_64-unknown-linux-musl",
+  "aarch64-unknown-linux-musl",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+
+# CI provider
+ci = "github"
+
+# Only distribute the CLI binary
+allow-dirty = ["ci"]
+
+# Archive format
+unix-archive = ".tar.gz"
+windows-archive = ".zip"
+
+# Installer generators
+installers = [
+  "shell",      # curl-pipe install script
+  "homebrew",   # Homebrew formula
+]
+
+# Homebrew tap
+tap = "mednabouli/homebrew-ironclaw"
+
+# Include in dist archives
+include = [
+  "LICENSE",
+  "LICENSE-MIT",
+  "README.md",
+  "CHANGELOG.md",
+]
+
+# Release title pattern
+tag-namespace = "v"
+
+# Extra build flags
+[dist.builds.cargo]
+features = []
+default-features = true

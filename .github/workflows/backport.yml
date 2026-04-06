@@ -1,0 +1,109 @@
+name: Backport
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    name: Backport to release branches
+    runs-on: ubuntu-latest
+    # Only run when a PR is merged (not just closed) and has a backport label
+    if: >
+      github.event.pull_request.merged == true &&
+      contains(toJSON(github.event.pull_request.labels.*.name), 'backport')
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect target branches from labels
+        id: targets
+        run: |
+          # Extract backport target branches from labels like "backport/release/v1.0"
+          LABELS='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          BRANCHES=$(echo "$LABELS" | jq -r '.[] | select(startswith("backport/")) | sub("backport/"; "")' | tr '\n' ' ')
+
+          if [ -z "$BRANCHES" ]; then
+            echo "No backport target branches found in labels."
+            echo "Add labels like 'backport/release/v1.0' to target specific branches."
+            exit 0
+          fi
+
+          echo "branches=$BRANCHES" >> "$GITHUB_OUTPUT"
+          echo "Backport targets: $BRANCHES"
+
+      - name: Cherry-pick to target branches
+        if: steps.targets.outputs.branches != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          for branch in ${{ steps.targets.outputs.branches }}; do
+            echo "::group::Backporting to $branch"
+
+            # Verify the target branch exists
+            if ! git ls-remote --exit-code --heads origin "$branch" > /dev/null 2>&1; then
+              echo "::warning::Branch $branch does not exist, skipping."
+              echo "::endgroup::"
+              continue
+            fi
+
+            BACKPORT_BRANCH="backport/${PR_NUMBER}-to-${branch//\//-}"
+
+            git fetch origin "$branch"
+            git checkout -b "$BACKPORT_BRANCH" "origin/$branch"
+
+            # Attempt the cherry-pick
+            if git cherry-pick --no-commit "$MERGE_SHA"; then
+              git commit -m "chore(backport): #${PR_NUMBER} to ${branch}
+
+Cherry-picked from ${MERGE_SHA}
+Original PR: #${PR_NUMBER} — ${PR_TITLE}"
+
+              git push origin "$BACKPORT_BRANCH"
+
+              # Create a PR for the backport
+              gh pr create \
+                --base "$branch" \
+                --head "$BACKPORT_BRANCH" \
+                --title "chore(backport): #${PR_NUMBER} → ${branch}" \
+                --body "Automated backport of #${PR_NUMBER} to \`${branch}\`.
+
+**Original PR:** #${PR_NUMBER} — ${PR_TITLE}
+**Cherry-picked commit:** ${MERGE_SHA}
+
+---
+_This PR was created automatically by the backport workflow._"
+
+              echo "Created backport PR for $branch"
+            else
+              # Cherry-pick had conflicts — create PR with conflict note
+              git cherry-pick --abort
+              echo "::warning::Cherry-pick to $branch had conflicts. Manual backport required."
+
+              gh issue comment "$PR_NUMBER" \
+                --body "⚠️ Automated backport to \`${branch}\` failed due to merge conflicts. Please cherry-pick manually:
+
+\`\`\`bash
+git checkout $branch
+git cherry-pick $MERGE_SHA
+# resolve conflicts
+git push origin $branch
+\`\`\`"
+            fi
+
+            git checkout main
+            echo "::endgroup::"
+          done

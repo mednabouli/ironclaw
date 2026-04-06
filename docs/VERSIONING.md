@@ -66,14 +66,74 @@ Starting from 1.0, IronClaw will designate **LTS releases**:
 | **Support window** | 12 months of patch releases after the next major is published |
 | **What's included** | Security fixes, critical bug fixes |
 | **What's excluded** | New features, performance improvements |
+| **Patch scope** | Only the latest two minor versions receive patches |
 
-**Example timeline:**
+### Concrete Policy (v1.0+)
+
+| Branch | Receives patches until |
+|--------|----------------------|
+| `v1.0.x` | 12 months after `v1.1.0` is published |
+| `v1.1.x` | 12 months after `v1.2.0` is published |
+| `v1.2.x` | 12 months after `v1.3.0` is published |
+
+Only the **latest two minor versions** receive patch releases at any time.
+Older minor versions are end-of-life once two newer minors exist.
+
+### Example Timeline
 
 ```
 v1.0.0 (LTS) ──── v1.1, v1.2, … ──── v2.0.0 ──── v1.x EOL (12 months after v2.0)
                                         v2.0 is NOT LTS
 v3.0.0 (LTS) ──── v3.1, v3.2, … ──── v4.0.0 ──── v3.x EOL (12 months after v4.0)
 ```
+
+### What Triggers a Backport
+
+| Severity | Backported? |
+|----------|------------|
+| CVE / security advisory | Yes — all supported branches |
+| Data loss / corruption | Yes — all supported branches |
+| Panic in library code | Yes — latest two minors |
+| Performance regression | No — upgrade to latest |
+| New feature | No — upgrade to latest |
+
+---
+
+## Release Branch Strategy
+
+### Branch Layout
+
+```
+main                    ← active development (next minor/major)
+release/v1.0            ← LTS maintenance branch for v1.0.x patches
+release/v1.1            ← maintenance branch for v1.1.x patches
+release/v2.0            ← LTS maintenance branch for v2.0.x patches
+```
+
+### Branch Rules
+
+| Branch | Purpose | Created when | Deleted when |
+|--------|---------|-------------|-------------|
+| `main` | Next release development | Always exists | Never |
+| `release/vX.Y` | Patch releases for vX.Y.z | vX.Y.0 is tagged | 12 months after vX.(Y+1).0 |
+
+### Workflow
+
+1. **New minor/major release:**
+   - Tag `vX.Y.0` from `main`
+   - Create `release/vX.Y` branch from the tag
+   - Continue development on `main`
+
+2. **Patch release:**
+   - Cherry-pick fix from `main` to `release/vX.Y`
+   - Bump patch version on the branch
+   - Tag `vX.Y.Z` from `release/vX.Y`
+   - CI builds + publishes automatically
+
+3. **Security fix:**
+   - Fix on `main` first
+   - Backport to all supported `release/vX.Y` branches via `backport.yml`
+   - Tag patch releases on each branch
 
 ---
 

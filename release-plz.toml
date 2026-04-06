@@ -1,0 +1,27 @@
+# release-plz configuration
+# https://release-plz.ieni.dev/docs/config
+
+[workspace]
+# All crates share the same version from workspace.package
+changelog_config = "cliff.toml"
+# Generate changelog from conventional commits
+git_release_enable = true
+git_tag_enable = true
+# Publish in dependency order
+publish_timeout = "30m"
+
+# The publish order is determined automatically by release-plz from
+# the dependency graph. No manual ordering needed.
+
+# ── Per-crate overrides ─────────────────────────────────────────────────────
+
+# Binary crate — don't publish as a library
+[[package]]
+name = "ironclaw-cli"
+git_release_enable = true
+changelog_include = ["feat", "fix", "perf", "docs"]
+
+# Core crate — the most important one
+[[package]]
+name = "ironclaw-core"
+changelog_include = ["feat", "fix", "perf", "refactor", "docs"]

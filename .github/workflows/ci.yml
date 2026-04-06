@@ -91,6 +91,44 @@ jobs:
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
 
+  semver-checks:
+    name: SemVer Compatibility
+    runs-on: ubuntu-latest
+    # Only run on PRs to main — compares against the latest published version
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-semver-checks
+        run: cargo install cargo-semver-checks
+
+      - name: Check semver compatibility (ironclaw-core)
+        run: cargo semver-checks check-release -p ironclaw-core --default-features
+        continue-on-error: true
+
+      - name: Check semver compatibility (all library crates)
+        run: |
+          for crate in ironclaw-core ironclaw-config ironclaw-providers \
+                       ironclaw-memory ironclaw-tools ironclaw-wasm \
+                       ironclaw-channels ironclaw-agents; do
+            echo "::group::Checking $crate"
+            cargo semver-checks check-release -p "$crate" --default-features || {
+              echo "::error::SemVer break detected in $crate"
+              FAILED=1
+            }
+            echo "::endgroup::"
+          done
+          if [ "${FAILED:-0}" = "1" ]; then
+            echo "::error::One or more crates have semver-incompatible changes."
+            echo "If this is intentional, bump the version accordingly."
+            exit 1
+          fi
+
   coverage:
     name: Coverage Gate (≥80% ironclaw-core)
     runs-on: ubuntu-latest
