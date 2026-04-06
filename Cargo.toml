@@ -38,14 +38,14 @@ missing_panics_doc      = "allow"
 # ── Shared dependencies ────────────────────────────────────────────────────
 [workspace.dependencies]
 # Internal crates
-ironclaw-core      = { path = "crates/ironclaw-core" }
-ironclaw-config    = { path = "crates/ironclaw-config" }
-ironclaw-providers = { path = "crates/ironclaw-providers" }
-ironclaw-memory    = { path = "crates/ironclaw-memory" }
-ironclaw-tools     = { path = "crates/ironclaw-tools" }
-ironclaw-wasm      = { path = "crates/ironclaw-wasm" }
-ironclaw-channels  = { path = "crates/ironclaw-channels" }
-ironclaw-agents    = { path = "crates/ironclaw-agents" }
+ironclaw-core      = { version = "0.1.1", path = "crates/ironclaw-core" }
+ironclaw-config    = { version = "0.1.1", path = "crates/ironclaw-config" }
+ironclaw-providers = { version = "0.1.1", path = "crates/ironclaw-providers" }
+ironclaw-memory    = { version = "0.1.1", path = "crates/ironclaw-memory" }
+ironclaw-tools     = { version = "0.1.1", path = "crates/ironclaw-tools" }
+ironclaw-wasm      = { version = "0.1.1", path = "crates/ironclaw-wasm" }
+ironclaw-channels  = { version = "0.1.1", path = "crates/ironclaw-channels" }
+ironclaw-agents    = { version = "0.1.1", path = "crates/ironclaw-agents" }
 
 # Async runtime
 tokio        = { version = "1", features = ["full"] }
