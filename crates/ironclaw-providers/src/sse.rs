@@ -65,10 +65,7 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
                         let delta_obj = &choice["delta"];
 
                         // ── Text delta ──
-                        let delta = delta_obj["content"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
+                        let delta = delta_obj["content"].as_str().unwrap_or("").to_string();
 
                         // ── Tool call deltas ──
                         let mut tool_calls = vec![];
@@ -76,9 +73,7 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
                             for tc in tc_arr {
                                 let index = tc["index"].as_u64().unwrap_or(0) as usize;
                                 let id = tc["id"].as_str().map(String::from);
-                                let name = tc["function"]["name"]
-                                    .as_str()
-                                    .map(String::from);
+                                let name = tc["function"]["name"].as_str().map(String::from);
                                 let arguments_delta = tc["function"]["arguments"]
                                     .as_str()
                                     .unwrap_or("")
@@ -93,13 +88,12 @@ pub fn parse_openai_sse_stream(response: reqwest::Response) -> BoxStream<StreamC
                         }
 
                         // ── Stop reason ──
-                        let stop_reason =
-                            choice["finish_reason"].as_str().and_then(|r| match r {
-                                "stop" => Some(StopReason::EndTurn),
-                                "tool_calls" => Some(StopReason::ToolUse),
-                                "length" => Some(StopReason::MaxTokens),
-                                _ => None,
-                            });
+                        let stop_reason = choice["finish_reason"].as_str().and_then(|r| match r {
+                            "stop" => Some(StopReason::EndTurn),
+                            "tool_calls" => Some(StopReason::ToolUse),
+                            "length" => Some(StopReason::MaxTokens),
+                            _ => None,
+                        });
 
                         // Skip completely empty chunks (no text, no tool calls)
                         if delta.is_empty() && tool_calls.is_empty() && stop_reason.is_none() {
@@ -203,14 +197,8 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                                 let index = v["index"].as_u64().unwrap_or(0) as usize;
                                 let block = &v["content_block"];
                                 if block["type"].as_str() == Some("tool_use") {
-                                    let id = block["id"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let name = block["name"]
-                                        .as_str()
-                                        .unwrap_or("")
-                                        .to_string();
+                                    let id = block["id"].as_str().unwrap_or("").to_string();
+                                    let name = block["name"].as_str().unwrap_or("").to_string();
                                     active_tools.push((index, id.clone(), name.clone()));
 
                                     // Emit the first delta so the consumer knows a
@@ -236,15 +224,12 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
                             "content_block_delta" => {
                                 let index = v["index"].as_u64().unwrap_or(0) as usize;
                                 let delta_obj = &v["delta"];
-                                let delta_type =
-                                    delta_obj["type"].as_str().unwrap_or("");
+                                let delta_type = delta_obj["type"].as_str().unwrap_or("");
 
                                 match delta_type {
                                     "text_delta" => {
-                                        let text = delta_obj["text"]
-                                            .as_str()
-                                            .unwrap_or("")
-                                            .to_string();
+                                        let text =
+                                            delta_obj["text"].as_str().unwrap_or("").to_string();
                                         if !text.is_empty() {
                                             let _ = tx
                                                 .send(Ok(StreamChunk {
@@ -288,15 +273,12 @@ pub fn parse_anthropic_sse_stream(response: reqwest::Response) -> BoxStream<Stre
 
                             // ── Message-level stop reason ──
                             "message_delta" => {
-                                let stop = v["delta"]["stop_reason"]
-                                    .as_str()
-                                    .and_then(|r| match r {
+                                let stop =
+                                    v["delta"]["stop_reason"].as_str().and_then(|r| match r {
                                         "end_turn" => Some(StopReason::EndTurn),
                                         "tool_use" => Some(StopReason::ToolUse),
                                         "max_tokens" => Some(StopReason::MaxTokens),
-                                        "stop_sequence" => {
-                                            Some(StopReason::StopSequence)
-                                        }
+                                        "stop_sequence" => Some(StopReason::StopSequence),
                                         _ => None,
                                     });
 
@@ -371,22 +353,16 @@ pub fn parse_ollama_ndjson_stream(response: reqwest::Response) -> BoxStream<Stre
                             continue;
                         };
 
-                        let delta = v["message"]["content"]
-                            .as_str()
-                            .unwrap_or("")
-                            .to_string();
+                        let delta = v["message"]["content"].as_str().unwrap_or("").to_string();
                         let done = v["done"].as_bool().unwrap_or(false);
 
                         // ── Parse tool calls from the final message ──
                         let mut tool_calls = vec![];
                         if let Some(tc_arr) = v["message"]["tool_calls"].as_array() {
                             for (i, tc) in tc_arr.iter().enumerate() {
-                                let name = tc["function"]["name"]
-                                    .as_str()
-                                    .unwrap_or("")
-                                    .to_string();
-                                let args = tc["function"]["arguments"]
-                                    .to_string();
+                                let name =
+                                    tc["function"]["name"].as_str().unwrap_or("").to_string();
+                                let args = tc["function"]["arguments"].to_string();
                                 tool_calls.push(ToolCallDelta {
                                     index: i,
                                     id: Some(uuid::Uuid::new_v4().to_string()),
@@ -434,11 +410,7 @@ mod tests {
     /// Helper: build a mock response from raw bytes.
     async fn mock_response(body: &'static [u8]) -> reqwest::Response {
         let mut server = mockito::Server::new_async().await;
-        let mock = server
-            .mock("GET", "/")
-            .with_body(body)
-            .create_async()
-            .await;
+        let mock = server.mock("GET", "/").with_body(body).create_async().await;
         let resp = reqwest::get(server.url()).await.unwrap();
         mock.assert_async().await;
         resp

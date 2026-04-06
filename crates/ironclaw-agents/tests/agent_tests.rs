@@ -52,10 +52,7 @@ mod streaming {
         async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
             anyhow::bail!("not used in stream test")
         }
-        async fn stream(
-            &self,
-            _req: CompletionRequest,
-        ) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
             let chunks: Vec<anyhow::Result<StreamChunk>> = vec![
                 Ok(StreamChunk {
                     delta: "Hello".into(),
@@ -90,10 +87,7 @@ mod streaming {
         async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<CompletionResponse> {
             anyhow::bail!("not used in stream test")
         }
-        async fn stream(
-            &self,
-            _req: CompletionRequest,
-        ) -> anyhow::Result<BoxStream<StreamChunk>> {
+        async fn stream(&self, _req: CompletionRequest) -> anyhow::Result<BoxStream<StreamChunk>> {
             let n = self
                 .call_count
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -158,12 +152,13 @@ mod streaming {
         let task = AgentTask::new("say hello");
         let stream = agent.stream_with_history("sess-1".into(), task);
 
-        let events: Vec<StreamEvent> = stream
-            .filter_map(|r| r.ok())
-            .collect()
-            .await;
+        let events: Vec<StreamEvent> = stream.filter_map(|r| r.ok()).collect().await;
 
-        assert!(events.len() >= 3, "Expected at least 3 events, got {}", events.len());
+        assert!(
+            events.len() >= 3,
+            "Expected at least 3 events, got {}",
+            events.len()
+        );
 
         // First two should be token deltas
         assert!(matches!(&events[0], StreamEvent::TokenDelta { delta } if delta == "Hello"));
@@ -183,15 +178,18 @@ mod streaming {
         let task = AgentTask::new("what time is it?");
         let stream = agent.stream_with_history("sess-2".into(), task);
 
-        let events: Vec<StreamEvent> = stream
-            .filter_map(|r| r.ok())
-            .collect()
-            .await;
+        let events: Vec<StreamEvent> = stream.filter_map(|r| r.ok()).collect().await;
 
         // Should contain: ToolCallStart, ToolCallEnd, TokenDelta("The time is now."), Done
-        let has_start = events.iter().any(|e| matches!(e, StreamEvent::ToolCallStart { name, .. } if name == "get_datetime"));
-        let has_end = events.iter().any(|e| matches!(e, StreamEvent::ToolCallEnd { id, .. } if id == "call_1"));
-        let has_delta = events.iter().any(|e| matches!(e, StreamEvent::TokenDelta { delta } if delta == "The time is now."));
+        let has_start = events.iter().any(
+            |e| matches!(e, StreamEvent::ToolCallStart { name, .. } if name == "get_datetime"),
+        );
+        let has_end = events
+            .iter()
+            .any(|e| matches!(e, StreamEvent::ToolCallEnd { id, .. } if id == "call_1"));
+        let has_delta = events
+            .iter()
+            .any(|e| matches!(e, StreamEvent::TokenDelta { delta } if delta == "The time is now."));
         let has_done = events.iter().any(|e| matches!(e, StreamEvent::Done { .. }));
 
         assert!(has_start, "Missing ToolCallStart event. Events: {events:?}");
@@ -200,10 +198,22 @@ mod streaming {
         assert!(has_done, "Missing Done event. Events: {events:?}");
 
         // Verify ordering: start before end, end before done
-        let start_pos = events.iter().position(|e| matches!(e, StreamEvent::ToolCallStart { .. })).unwrap();
-        let end_pos = events.iter().position(|e| matches!(e, StreamEvent::ToolCallEnd { .. })).unwrap();
-        let done_pos = events.iter().position(|e| matches!(e, StreamEvent::Done { .. })).unwrap();
-        assert!(start_pos < end_pos, "ToolCallStart should precede ToolCallEnd");
+        let start_pos = events
+            .iter()
+            .position(|e| matches!(e, StreamEvent::ToolCallStart { .. }))
+            .unwrap();
+        let end_pos = events
+            .iter()
+            .position(|e| matches!(e, StreamEvent::ToolCallEnd { .. }))
+            .unwrap();
+        let done_pos = events
+            .iter()
+            .position(|e| matches!(e, StreamEvent::Done { .. }))
+            .unwrap();
+        assert!(
+            start_pos < end_pos,
+            "ToolCallStart should precede ToolCallEnd"
+        );
         assert!(end_pos < done_pos, "ToolCallEnd should precede Done");
     }
 }

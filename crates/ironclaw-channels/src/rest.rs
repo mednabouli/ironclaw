@@ -144,9 +144,7 @@ async fn stream_chat_handler(
             }
             Err(e) => {
                 let json = serde_json::json!({ "type": "error", "message": e.to_string() });
-                Ok(Event::default()
-                    .event("error")
-                    .data(json.to_string()))
+                Ok(Event::default().event("error").data(json.to_string()))
             }
         }
     });
@@ -320,7 +318,10 @@ mod tests {
             .get("content-type")
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
-        assert!(ct.contains("text/event-stream"), "Expected SSE content-type, got: {ct}");
+        assert!(
+            ct.contains("text/event-stream"),
+            "Expected SSE content-type, got: {ct}"
+        );
     }
 
     /// A handler that returns a short stream for testing.
@@ -328,10 +329,7 @@ mod tests {
 
     #[async_trait]
     impl MessageHandler for StreamTestHandler {
-        async fn handle(
-            &self,
-            _msg: InboundMessage,
-        ) -> anyhow::Result<Option<OutboundMessage>> {
+        async fn handle(&self, _msg: InboundMessage) -> anyhow::Result<Option<OutboundMessage>> {
             Ok(None)
         }
 
@@ -394,7 +392,11 @@ mod tests {
             }
         }
 
-        assert!(events.len() >= 2, "Expected ≥2 SSE events, got {}", events.len());
+        assert!(
+            events.len() >= 2,
+            "Expected ≥2 SSE events, got {}",
+            events.len()
+        );
 
         // First event: token_delta with "Hello"
         assert_eq!(events[0].0, "token_delta");

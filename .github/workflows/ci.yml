@@ -23,7 +23,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v3
 
       - name: Check format
         run: cargo fmt --all -- --check
@@ -51,7 +51,7 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
 
       - name: Run unit tests
         run: cargo test --workspace --lib --all-features
@@ -68,5 +68,5 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@1.86
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v3
       - run: cargo check --workspace --all-features

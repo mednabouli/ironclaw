@@ -1,5 +1,7 @@
 use async_trait::async_trait;
-use ironclaw_core::{BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent};
+use ironclaw_core::{
+    BoxStream, InboundMessage, Message, MessageHandler, OutboundMessage, StreamEvent,
+};
 use tracing::{debug, error};
 
 use crate::{context::AgentContext, react::ReActAgent};
@@ -55,7 +57,8 @@ impl MessageHandler for AgentHandler {
     }
 
     async fn handle_stream(&self, msg: InboundMessage) -> anyhow::Result<BoxStream<StreamEvent>> {
-        let span = tracing::info_span!("handle_stream", session = %msg.session_id, channel = ?msg.channel);
+        let span =
+            tracing::info_span!("handle_stream", session = %msg.session_id, channel = ?msg.channel);
         let _g = span.enter();
 
         debug!(content = %msg.content, "Handling stream message");

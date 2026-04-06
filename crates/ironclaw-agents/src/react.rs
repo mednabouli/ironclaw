@@ -189,9 +189,10 @@ impl ReActAgent {
                 model: None,
             };
 
-            let mut stream = provider.stream(req).await.with_context(|| {
-                format!("Provider stream error at iteration {iteration}")
-            })?;
+            let mut stream = provider
+                .stream(req)
+                .await
+                .with_context(|| format!("Provider stream error at iteration {iteration}"))?;
 
             // Accumulate text and tool call deltas from the stream
             let mut full_text = String::new();
@@ -205,9 +206,7 @@ impl ReActAgent {
                 if !chunk.delta.is_empty() {
                     full_text.push_str(&chunk.delta);
                     let _ = tx
-                        .send(Ok(StreamEvent::TokenDelta {
-                            delta: chunk.delta,
-                        }))
+                        .send(Ok(StreamEvent::TokenDelta { delta: chunk.delta }))
                         .await;
                 }
 
@@ -287,21 +286,13 @@ impl ReActAgent {
                     tokens = total_usage.total_tokens,
                     "Streaming ReAct complete"
                 );
-                let _ = tx
-                    .send(Ok(StreamEvent::Done {
-                        usage: total_usage,
-                    }))
-                    .await;
+                let _ = tx.send(Ok(StreamEvent::Done { usage: total_usage })).await;
                 return Ok(());
             }
         }
 
         warn!("Max iterations ({MAX_ITERATIONS}) reached in streaming ReAct");
-        let _ = tx
-            .send(Ok(StreamEvent::Done {
-                usage: total_usage,
-            }))
-            .await;
+        let _ = tx.send(Ok(StreamEvent::Done { usage: total_usage })).await;
         Ok(())
     }
 }
