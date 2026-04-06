@@ -1,11 +1,11 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{io::IsTerminal, path::PathBuf, sync::Arc};
 
 use anyhow::Context;
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use ironclaw_agents::{AgentContext, AgentHandler};
 use ironclaw_channels::{CliChannel, RestChannel};
-use ironclaw_config::IronClawConfig;
+use ironclaw_config::{ConfigWatcher, IronClawConfig};
 use ironclaw_core::{Channel, CompletionRequest, Message};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
@@ -177,7 +177,7 @@ async fn main() -> anyhow::Result<()> {
     info!(version = env!("CARGO_PKG_VERSION"), "IronClaw starting");
 
     match cli.command {
-        Commands::Start => cmd_start(cfg).await?,
+        Commands::Start => cmd_start(cfg, &cli.config).await?,
         Commands::Chat { model } => cmd_chat(cfg, model).await?,
         Commands::Run { prompt, json } => cmd_run(cfg, prompt, json).await?,
         Commands::Health => cmd_health(cfg).await?,
@@ -203,8 +203,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 // ── start ─────────────────────────────────────────────────────────────────
-async fn cmd_start(cfg: IronClawConfig) -> anyhow::Result<()> {
+async fn cmd_start(cfg: IronClawConfig, config_path: &std::path::Path) -> anyhow::Result<()> {
     let ctx = AgentContext::from_config(cfg.clone()).await?;
+
+    // Start hot-reload watcher — keeps previous config on parse errors.
+    let _watcher = ConfigWatcher::start(config_path, ctx.config.clone())?;
+
     let handler = Arc::new(AgentHandler::new(ctx));
 
     let mut handles = vec![];
@@ -276,7 +280,7 @@ async fn cmd_run(cfg: IronClawConfig, prompt: String, as_json: bool) -> anyhow::
     };
 
     // Show spinner while waiting for model response (only when not piped)
-    let spinner = if atty::is(atty::Stream::Stderr) && !as_json {
+    let spinner = if std::io::stderr().is_terminal() && !as_json {
         let sp = indicatif::ProgressBar::new_spinner();
         sp.set_style(
             indicatif::ProgressStyle::with_template("{spinner:.cyan} {msg}")

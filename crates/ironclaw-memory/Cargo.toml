@@ -22,3 +22,10 @@ sqlx         = { workspace = true }
 redis        = { workspace = true }
 uuid         = { workspace = true }
 chrono       = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "memory_bench"
+harness = false

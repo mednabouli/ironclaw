@@ -765,10 +765,12 @@ mod registry {
         use ironclaw_config::ProvidersConfig;
 
         // Build a config with no real providers configured
-        let mut cfg = IronClawConfig::default();
-        cfg.providers = ProvidersConfig {
-            primary: "nonexistent".into(),
-            fallback: vec![],
+        let mut cfg = IronClawConfig {
+            providers: ProvidersConfig {
+                primary: "nonexistent".into(),
+                fallback: vec![],
+                ..Default::default()
+            },
             ..Default::default()
         };
         // Override ollama base_url to a port nothing listens on

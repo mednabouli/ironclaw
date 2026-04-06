@@ -79,7 +79,8 @@ mod tests {
     fn render_returns_string_without_panic() {
         // Before install, render should return empty string
         let s = render();
-        assert!(s.is_empty() || s.contains("ironclaw") || true);
+        // Just verify it doesn't panic; content may be empty or contain metrics
+        let _ = s;
     }
 
     #[test]

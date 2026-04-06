@@ -45,15 +45,15 @@ fn bench_completion_request_serde(c: &mut Criterion) {
 
 fn bench_completion_response_serde(c: &mut Criterion) {
     let resp = CompletionResponse {
-        content: "Rust ownership is a system of rules...".to_string(),
-        tool_calls: vec![],
+        message: Message::assistant("Rust ownership is a system of rules..."),
         usage: TokenUsage {
-            prompt: 25,
-            completion: 50,
-            total: 75,
+            prompt_tokens: 25,
+            completion_tokens: 50,
+            total_tokens: 75,
         },
         stop_reason: StopReason::EndTurn,
         model: "test-model".to_string(),
+        latency_ms: 42,
     };
 
     c.bench_function("CompletionResponse serialize", |b| {
@@ -68,7 +68,7 @@ fn bench_completion_response_serde(c: &mut Criterion) {
 
 fn bench_token_usage_default(c: &mut Criterion) {
     c.bench_function("TokenUsage::default", |b| {
-        b.iter(|| TokenUsage::default());
+        b.iter(TokenUsage::default);
     });
 }
 

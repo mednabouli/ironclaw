@@ -69,7 +69,8 @@ impl Agent for ChainOfThoughtAgent {
 
         let provider = self.ctx.providers.resolve().await?;
 
-        let system = Self::cot_system_prompt(&self.ctx.config.agent.system_prompt);
+        let cfg = self.ctx.config.load();
+        let system = Self::cot_system_prompt(&cfg.agent.system_prompt);
         let mut messages = vec![Message::system(&system)];
         messages.extend(task.context.clone());
         messages.push(Message::user(&task.instruction));
@@ -77,8 +78,8 @@ impl Agent for ChainOfThoughtAgent {
         let req = CompletionRequest {
             messages,
             tools: vec![],
-            max_tokens: task.max_tokens.or(Some(self.ctx.config.agent.max_tokens)),
-            temperature: Some(self.ctx.config.agent.temperature),
+            max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
+            temperature: Some(cfg.agent.temperature),
             stream: false,
             model: None,
             response_format: Default::default(),

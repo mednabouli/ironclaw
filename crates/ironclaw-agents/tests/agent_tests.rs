@@ -136,13 +136,14 @@ mod streaming {
     }
 
     fn make_ctx_with_provider(provider: Arc<dyn Provider>) -> AgentContext {
-        let cfg = Arc::new(IronClawConfig::default());
+        let cfg = IronClawConfig::default();
         let mut reg = ProviderRegistry::new();
         reg.register(provider);
         reg.set_fallback_chain(vec!["mock".into()]);
         let tools = Arc::new(ToolRegistry::from_config(&cfg));
         let memory = Arc::new(ironclaw_memory::InMemoryStore::new(100));
-        AgentContext::new(cfg, Arc::new(reg), tools, memory)
+        let config = Arc::new(arc_swap::ArcSwap::from_pointee(cfg));
+        AgentContext::new(config, Arc::new(reg), tools, memory)
     }
 
     #[tokio::test]

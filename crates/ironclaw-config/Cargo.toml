@@ -17,3 +17,10 @@ notify    = "7"
 arc-swap  = "1"
 tracing   = { workspace = true }
 tokio     = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+
+[[bench]]
+name = "config_bench"
+harness = false

@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn encode_decode_roundtrip() {
-        let original = vec![1.0_f32, -2.5, 0.0, 3.14];
+        let original = vec![1.0_f32, -2.5, 0.0, 3.125];
         let blob = SqliteVectorStore::encode_vector(&original);
         let decoded = SqliteVectorStore::decode_vector(&blob);
         assert_eq!(original, decoded);

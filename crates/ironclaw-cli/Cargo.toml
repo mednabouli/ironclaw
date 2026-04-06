@@ -31,7 +31,6 @@ serde_json   = { workspace = true }
 clap         = { version = "4", features = ["derive"] }
 clap_complete = "4"
 indicatif    = "0.17"
-atty         = "0.2"
 reqwest      = { workspace = true }
 
 [features]

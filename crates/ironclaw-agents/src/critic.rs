@@ -231,11 +231,12 @@ mod tests {
     }
 
     fn make_ctx() -> AgentContext {
-        let cfg = Arc::new(ironclaw_config::IronClawConfig::default());
+        let cfg = ironclaw_config::IronClawConfig::default();
         let reg = ironclaw_providers::ProviderRegistry::new();
         let tools = Arc::new(ironclaw_tools::ToolRegistry::from_config(&cfg));
         let memory = Arc::new(ironclaw_memory::InMemoryStore::new(100));
-        AgentContext::new(cfg, Arc::new(reg), tools, memory)
+        let config = Arc::new(arc_swap::ArcSwap::from_pointee(cfg));
+        AgentContext::new(config, Arc::new(reg), tools, memory)
     }
 
     #[tokio::test]

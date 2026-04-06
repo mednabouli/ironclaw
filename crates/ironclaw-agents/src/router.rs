@@ -138,22 +138,24 @@ mod tests {
 
     #[test]
     fn router_role_is_router() {
-        let cfg = Arc::new(ironclaw_config::IronClawConfig::default());
+        let cfg = ironclaw_config::IronClawConfig::default();
         let reg = ironclaw_providers::ProviderRegistry::new();
         let tools = Arc::new(ironclaw_tools::ToolRegistry::from_config(&cfg));
         let memory = Arc::new(ironclaw_memory::InMemoryStore::new(100));
-        let ctx = AgentContext::new(cfg, Arc::new(reg), tools, memory);
+        let config = Arc::new(arc_swap::ArcSwap::from_pointee(cfg));
+        let ctx = AgentContext::new(config, Arc::new(reg), tools, memory);
         let router = RouterAgent::new(ctx);
         assert!(matches!(router.role(), AgentRole::Router));
     }
 
     #[test]
     fn classification_prompt_lists_routes() {
-        let cfg = Arc::new(ironclaw_config::IronClawConfig::default());
+        let cfg = ironclaw_config::IronClawConfig::default();
         let reg = ironclaw_providers::ProviderRegistry::new();
         let tools = Arc::new(ironclaw_tools::ToolRegistry::from_config(&cfg));
         let memory = Arc::new(ironclaw_memory::InMemoryStore::new(100));
-        let ctx = AgentContext::new(cfg, Arc::new(reg), tools, memory);
+        let config = Arc::new(arc_swap::ArcSwap::from_pointee(cfg));
+        let ctx = AgentContext::new(config, Arc::new(reg), tools, memory);
 
         let agent_a = Arc::new(EchoAgent {
             id: "a".into(),

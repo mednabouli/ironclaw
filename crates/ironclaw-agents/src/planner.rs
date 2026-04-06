@@ -252,11 +252,12 @@ mod tests {
 
     #[test]
     fn planner_role_is_planner() {
-        let cfg = Arc::new(ironclaw_config::IronClawConfig::default());
+        let cfg = ironclaw_config::IronClawConfig::default();
         let reg = ironclaw_providers::ProviderRegistry::new();
         let tools = Arc::new(ironclaw_tools::ToolRegistry::from_config(&cfg));
         let memory = Arc::new(ironclaw_memory::InMemoryStore::new(100));
-        let ctx = AgentContext::new(cfg, Arc::new(reg), tools, memory);
+        let config = Arc::new(arc_swap::ArcSwap::from_pointee(cfg));
+        let ctx = AgentContext::new(config, Arc::new(reg), tools, memory);
         let worker = Arc::new(EchoWorker { id: "w".into() });
         let planner = PlannerAgent::new(ctx, worker, 5);
         assert!(matches!(planner.role(), AgentRole::Planner));

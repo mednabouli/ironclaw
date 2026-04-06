@@ -31,7 +31,7 @@ impl ReActAgent {
     ) -> anyhow::Result<AgentOutput> {
         let history = self.ctx.memory.history(session_id, 50).await?;
         let mut messages: Vec<Message> =
-            vec![Message::system(&self.ctx.config.agent.system_prompt)];
+            vec![Message::system(&self.ctx.config.load().agent.system_prompt)];
         messages.extend(history);
         messages.push(Message::user(&task.instruction));
 
@@ -60,11 +60,12 @@ impl ReActAgent {
         for iteration in 0..MAX_ITERATIONS {
             debug!(iteration, "ReAct iteration");
 
+            let cfg = self.ctx.config.load();
             let req = CompletionRequest {
                 messages: messages.clone(),
                 tools: tool_schemas.clone(),
-                max_tokens: task.max_tokens.or(Some(self.ctx.config.agent.max_tokens)),
-                temperature: Some(self.ctx.config.agent.temperature),
+                max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
+                temperature: Some(cfg.agent.temperature),
                 stream: false,
                 model: None,
                 response_format: Default::default(),
@@ -161,7 +162,8 @@ impl ReActAgent {
         tx: mpsc::Sender<anyhow::Result<StreamEvent>>,
     ) -> anyhow::Result<()> {
         let history = ctx.memory.history(&session_id, 50).await?;
-        let mut messages: Vec<Message> = vec![Message::system(&ctx.config.agent.system_prompt)];
+        let mut messages: Vec<Message> =
+            vec![Message::system(&ctx.config.load().agent.system_prompt)];
         messages.extend(history);
         messages.push(Message::user(&task.instruction));
 
@@ -179,11 +181,12 @@ impl ReActAgent {
         for iteration in 0..MAX_ITERATIONS {
             debug!(iteration, "Streaming ReAct iteration");
 
+            let cfg = ctx.config.load();
             let req = CompletionRequest {
                 messages: messages.clone(),
                 tools: tool_schemas.clone(),
-                max_tokens: task.max_tokens.or(Some(ctx.config.agent.max_tokens)),
-                temperature: Some(ctx.config.agent.temperature),
+                max_tokens: task.max_tokens.or(Some(cfg.agent.max_tokens)),
+                temperature: Some(cfg.agent.temperature),
                 stream: true,
                 model: None,
                 response_format: Default::default(),
@@ -303,7 +306,7 @@ impl Agent for ReActAgent {
     }
 
     async fn run(&self, task: AgentTask) -> anyhow::Result<AgentOutput> {
-        let mut messages = vec![Message::system(&self.ctx.config.agent.system_prompt)];
+        let mut messages = vec![Message::system(&self.ctx.config.load().agent.system_prompt)];
         messages.extend(task.context.clone());
         messages.push(Message::user(&task.instruction));
         self.react_loop(task, messages).await
