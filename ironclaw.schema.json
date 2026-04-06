@@ -1,0 +1,221 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "IronClaw Configuration",
+  "description": "Schema for ironclaw.toml configuration file",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "type": "object",
+      "description": "Agent behavior configuration",
+      "properties": {
+        "name": { "type": "string", "default": "IronClaw", "description": "Agent display name" },
+        "system_prompt": { "type": "string", "default": "You are IronClaw, a helpful AI assistant.", "description": "Default system prompt for conversations" },
+        "max_tokens": { "type": "integer", "minimum": 1, "default": 4096, "description": "Maximum tokens per completion" },
+        "temperature": { "type": "number", "minimum": 0.0, "maximum": 2.0, "default": 0.7, "description": "Sampling temperature" }
+      },
+      "additionalProperties": false
+    },
+    "providers": {
+      "type": "object",
+      "description": "LLM provider configuration",
+      "properties": {
+        "primary": { "type": "string", "default": "ollama", "description": "Primary provider name", "enum": ["ollama", "claude", "openai", "groq", "openrouter"] },
+        "fallback": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Fallback provider chain" },
+        "retry": {
+          "type": "object",
+          "description": "Retry policy for provider API calls",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "max_retries": { "type": "integer", "minimum": 0, "default": 3 },
+            "base_delay_ms": { "type": "integer", "minimum": 0, "default": 500, "description": "Base delay between retries in milliseconds" },
+            "max_delay_ms": { "type": "integer", "minimum": 0, "default": 30000, "description": "Maximum delay cap in milliseconds" }
+          },
+          "additionalProperties": false
+        },
+        "ollama": {
+          "type": "object",
+          "properties": {
+            "base_url": { "type": "string", "format": "uri", "default": "http://localhost:11434" },
+            "model": { "type": "string", "default": "llama3.2" }
+          },
+          "additionalProperties": false
+        },
+        "claude": {
+          "type": "object",
+          "properties": {
+            "api_key": { "type": "string", "description": "Anthropic API key (use ${ANTHROPIC_API_KEY})" },
+            "model": { "type": "string", "default": "claude-3-5-sonnet-20241022" },
+            "base_url": { "type": "string", "format": "uri", "default": "https://api.anthropic.com" }
+          },
+          "additionalProperties": false
+        },
+        "openai": {
+          "type": "object",
+          "properties": {
+            "api_key": { "type": "string", "description": "OpenAI API key (use ${OPENAI_API_KEY})" },
+            "model": { "type": "string", "default": "gpt-4o-mini" },
+            "base_url": { "type": "string", "format": "uri", "default": "https://api.openai.com" }
+          },
+          "additionalProperties": false
+        },
+        "groq": {
+          "type": "object",
+          "properties": {
+            "api_key": { "type": "string", "description": "Groq API key (use ${GROQ_API_KEY})" },
+            "model": { "type": "string", "default": "llama-3.3-70b-versatile" }
+          },
+          "additionalProperties": false
+        },
+        "openrouter": {
+          "type": "object",
+          "properties": {
+            "api_key": { "type": "string", "description": "OpenRouter API key (use ${OPENROUTER_API_KEY})" },
+            "model": { "type": "string", "default": "openai/gpt-4o" }
+          },
+          "additionalProperties": false
+        },
+        "extra": {
+          "type": "object",
+          "description": "Additional OpenAI-compatible providers",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "base_url": { "type": "string", "format": "uri" },
+              "api_key": { "type": "string" },
+              "model": { "type": "string" }
+            },
+            "required": ["base_url", "api_key", "model"]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "channels": {
+      "type": "object",
+      "description": "Communication channel configuration",
+      "properties": {
+        "enabled": { "type": "array", "items": { "type": "string" }, "default": ["cli"], "description": "Active channels" },
+        "rate_limit": {
+          "type": "object",
+          "description": "Per-user rate limiting (token bucket)",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "capacity": { "type": "integer", "minimum": 1, "default": 20, "description": "Maximum burst size" },
+            "refill_tokens": { "type": "integer", "minimum": 1, "default": 1 },
+            "refill_interval_secs": { "type": "integer", "minimum": 1, "default": 3 }
+          },
+          "additionalProperties": false
+        },
+        "telegram": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string", "description": "Telegram bot token (use ${TELEGRAM_BOT_TOKEN})" }
+          },
+          "additionalProperties": false
+        },
+        "rest": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string", "default": "127.0.0.1" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 8080 },
+            "auth_token": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "discord": {
+          "type": "object",
+          "properties": {
+            "token": { "type": "string", "description": "Discord bot token (use ${DISCORD_TOKEN})" }
+          },
+          "additionalProperties": false
+        },
+        "slack": {
+          "type": "object",
+          "properties": {
+            "bot_token": { "type": "string" },
+            "signing_secret": { "type": "string" },
+            "host": { "type": "string", "default": "127.0.0.1" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 3000 }
+          },
+          "additionalProperties": false
+        },
+        "websocket": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string", "default": "127.0.0.1" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 8081 },
+            "auth_token": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "webhook": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string", "default": "127.0.0.1" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535, "default": 9000 },
+            "path": { "type": "string", "default": "/webhook" },
+            "auth_token": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "matrix": {
+          "type": "object",
+          "properties": {
+            "homeserver_url": { "type": "string", "format": "uri" },
+            "access_token": { "type": "string" },
+            "user_id": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "description": "Memory/storage backend configuration",
+      "properties": {
+        "backend": { "type": "string", "enum": ["memory", "sqlite", "redis"], "default": "memory" },
+        "max_history": { "type": "integer", "minimum": 1, "default": 50 },
+        "path": { "type": "string", "default": "~/.ironclaw/memory.db", "description": "SQLite database path" },
+        "redis": {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "format": "uri", "default": "redis://127.0.0.1:6379" },
+            "key_prefix": { "type": "string", "default": "ironclaw:" },
+            "max_history": { "type": "integer", "minimum": 1, "default": 50 }
+          },
+          "additionalProperties": false
+        },
+        "embedding_dimensions": { "type": "integer", "minimum": 1, "default": 384 }
+      },
+      "additionalProperties": false
+    },
+    "tools": {
+      "type": "object",
+      "description": "Tool/plugin configuration",
+      "properties": {
+        "enabled": { "type": "array", "items": { "type": "string" }, "default": ["datetime"] },
+        "shell": {
+          "type": "object",
+          "properties": {
+            "allowlist": { "type": "array", "items": { "type": "string" }, "default": ["ls", "echo", "cat"] },
+            "timeout_secs": { "type": "integer", "minimum": 1, "default": 30 }
+          },
+          "additionalProperties": false
+        },
+        "file_allowed_dirs": { "type": "array", "items": { "type": "string" }, "default": [] }
+      },
+      "additionalProperties": false
+    },
+    "telemetry": {
+      "type": "object",
+      "description": "Logging and telemetry settings",
+      "properties": {
+        "level": { "type": "string", "enum": ["trace", "debug", "info", "warn", "error"], "default": "info" },
+        "format": { "type": "string", "enum": ["pretty", "json", "compact"], "default": "pretty" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

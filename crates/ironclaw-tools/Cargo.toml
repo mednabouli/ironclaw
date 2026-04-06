@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-tools"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-tools"
+description = "Built-in tool implementations (shell, HTTP, search, datetime) for IronClaw"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [dependencies]
 ironclaw-core   = { workspace = true }

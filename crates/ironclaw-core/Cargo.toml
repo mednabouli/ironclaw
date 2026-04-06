@@ -1,9 +1,15 @@
 
 [package]
-name    = "ironclaw-core"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-core"
+description = "Core traits and types for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
+readme      = "README.md"
+keywords    = ["ai", "agent", "llm", "framework", "async"]
+categories  = ["asynchronous", "api-bindings"]
 
 [dependencies]
 async-trait  = { workspace = true }
@@ -14,3 +20,11 @@ tokio-stream = { workspace = true }
 futures      = { workspace = true }
 uuid         = { workspace = true }
 chrono       = { workspace = true }
+
+[dev-dependencies]
+criterion = { workspace = true }
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[[bench]]
+name = "core_bench"
+harness = false

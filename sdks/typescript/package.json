@@ -1,0 +1,35 @@
+{
+  "name": "@ironclaw/client",
+  "version": "0.1.0",
+  "description": "Typed TypeScript client for the IronClaw AI agent REST + SSE API",
+  "license": "MIT",
+  "author": "IronClaw Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mednabouli/ironclaw",
+    "directory": "sdks/typescript"
+  },
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["ironclaw", "ai", "agent", "llm", "sse", "streaming"]
+}

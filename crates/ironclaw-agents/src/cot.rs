@@ -81,6 +81,7 @@ impl Agent for ChainOfThoughtAgent {
             temperature: Some(self.ctx.config.agent.temperature),
             stream: false,
             model: None,
+            response_format: Default::default(),
         };
 
         let resp = provider.complete(req).await?;

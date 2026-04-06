@@ -105,6 +105,7 @@ impl Agent for PlannerAgent {
             temperature: Some(0.3),
             stream: false,
             model: None,
+            response_format: Default::default(),
         };
 
         let resp = provider.complete(req).await?;

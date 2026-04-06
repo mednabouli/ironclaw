@@ -147,20 +147,25 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
 
-      - run: cargo publish -p ironclaw-core        --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-config      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-providers   --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-memory      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-tools       --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-wasm        --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-channels    --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-agents      --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      - run: sleep 30
-      - run: cargo publish -p ironclaw-cli         --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Publish crates in dependency order
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local crate="$1"
+            echo "Publishing ${crate}..."
+            cargo publish -p "$crate" --no-verify --token "$CARGO_REGISTRY_TOKEN"
+            echo "Waiting for crates.io index to update..."
+            sleep 30
+          }
+          publish ironclaw-core
+          publish ironclaw-config
+          publish ironclaw-providers
+          publish ironclaw-memory
+          publish ironclaw-wasm
+          publish ironclaw-tools
+          publish ironclaw-channels
+          publish ironclaw-agents
+          publish ironclaw-cli
+          echo "All crates published successfully."

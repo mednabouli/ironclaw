@@ -1,12 +1,19 @@
 
 [package]
-name    = "ironclaw-config"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-config"
+description = "TOML configuration and hot-reload for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [dependencies]
 serde     = { workspace = true }
 serde_json= { workspace = true }
 anyhow    = { workspace = true }
 toml      = "0.8"
+notify    = "7"
+arc-swap  = "1"
+tracing   = { workspace = true }
+tokio     = { workspace = true }

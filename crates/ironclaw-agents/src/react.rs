@@ -67,6 +67,7 @@ impl ReActAgent {
                 temperature: Some(self.ctx.config.agent.temperature),
                 stream: false,
                 model: None,
+                response_format: Default::default(),
             };
 
             let resp = provider
@@ -185,6 +186,7 @@ impl ReActAgent {
                 temperature: Some(ctx.config.agent.temperature),
                 stream: true,
                 model: None,
+                response_format: Default::default(),
             };
 
             let mut stream = provider

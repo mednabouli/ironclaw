@@ -2,6 +2,9 @@ use std::{collections::HashMap, path::Path};
 
 use serde::{Deserialize, Serialize};
 
+pub mod watcher;
+pub use watcher::ConfigWatcher;
+
 /// Master config struct — parsed from ironclaw.toml
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -79,6 +82,9 @@ pub struct ProvidersConfig {
     pub openai: OpenAIConfig,
     pub groq: GroqConfig,
     pub openrouter: OpenRouterConfig,
+    pub mistral: MistralConfig,
+    pub together: TogetherConfig,
+    pub cohere: CohereConfig,
     pub extra: HashMap<String, ExtraProviderConfig>,
 }
 impl Default for ProvidersConfig {
@@ -92,6 +98,9 @@ impl Default for ProvidersConfig {
             openai: Default::default(),
             groq: Default::default(),
             openrouter: Default::default(),
+            mistral: Default::default(),
+            together: Default::default(),
+            cohere: Default::default(),
             extra: HashMap::new(),
         }
     }
@@ -196,6 +205,60 @@ impl Default for OpenRouterConfig {
         Self {
             api_key: String::new(),
             model: "openai/gpt-4o".into(),
+        }
+    }
+}
+
+/// Mistral AI provider configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MistralConfig {
+    /// API key for Mistral AI.
+    pub api_key: String,
+    /// Model name (e.g. "mistral-large-latest").
+    pub model: String,
+}
+impl Default for MistralConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "mistral-large-latest".into(),
+        }
+    }
+}
+
+/// Together AI provider configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TogetherConfig {
+    /// API key for Together AI.
+    pub api_key: String,
+    /// Model name (e.g. "meta-llama/Llama-3-70b").
+    pub model: String,
+}
+impl Default for TogetherConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "meta-llama/Llama-3-70b".into(),
+        }
+    }
+}
+
+/// Cohere provider configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CohereConfig {
+    /// API key for Cohere.
+    pub api_key: String,
+    /// Model name (e.g. "command-r-plus").
+    pub model: String,
+}
+impl Default for CohereConfig {
+    fn default() -> Self {
+        Self {
+            api_key: String::new(),
+            model: "command-r-plus".into(),
         }
     }
 }

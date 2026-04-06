@@ -271,6 +271,7 @@ mod tests {
             temperature: Some(0.7),
             stream: false,
             model: None,
+            response_format: Default::default(),
         }
     }
 

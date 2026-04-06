@@ -97,6 +97,21 @@ impl ProviderRegistry {
                 &c.api_key, &c.model,
             )));
         }
+        #[cfg(feature = "mistral")]
+        if !cfg.providers.mistral.api_key.is_empty() {
+            let c = &cfg.providers.mistral;
+            reg.register(Arc::new(crate::MistralProvider::new(&c.api_key, &c.model)));
+        }
+        #[cfg(feature = "together")]
+        if !cfg.providers.together.api_key.is_empty() {
+            let c = &cfg.providers.together;
+            reg.register(Arc::new(crate::TogetherProvider::new(&c.api_key, &c.model)));
+        }
+        #[cfg(feature = "cohere")]
+        if !cfg.providers.cohere.api_key.is_empty() {
+            let c = &cfg.providers.cohere;
+            reg.register(Arc::new(crate::CohereProvider::new(&c.api_key, &c.model)));
+        }
         // Register generic OpenAI-compatible providers from [providers.extra.*]
         for (name, c) in &cfg.providers.extra {
             if !c.api_key.is_empty() {

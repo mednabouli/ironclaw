@@ -1,0 +1,41 @@
+# IronClaw development stack
+# Usage: docker compose up -d
+# Then:  cargo run --bin ironclaw -- doctor
+#
+# Ollama will pull llama3.2 on first run.
+# GPU passthrough requires nvidia-container-toolkit on Linux.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ironclaw-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Pull default model after Ollama is healthy
+  ollama-init:
+    image: curlimages/curl:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "curl -s http://ollama:11434/api/pull -d '{\"name\":\"llama3.2\"}' && echo 'Model pulled'"
+    restart: "no"
+
+volumes:
+  ollama_data:

@@ -29,6 +29,7 @@ fn tool_request() -> CompletionRequest {
         temperature: Some(0.5),
         stream: false,
         model: None,
+        response_format: Default::default(),
     }
 }
 

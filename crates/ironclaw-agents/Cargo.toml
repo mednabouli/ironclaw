@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-agents"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-agents"
+description = "Agent patterns (ReAct, Router, Planner, Critic-Actor) for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [dependencies]
 ironclaw-core      = { workspace = true }
@@ -21,3 +24,4 @@ uuid         = { workspace = true }
 dashmap      = { workspace = true }
 futures      = { workspace = true }
 tokio-stream = { workspace = true }
+toml         = "0.8"

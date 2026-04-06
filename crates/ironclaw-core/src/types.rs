@@ -110,6 +110,23 @@ pub enum StopReason {
     StopSequence,
 }
 
+// ── Response format ────────────────────────────────────────────────────────
+/// Controls the output format of the provider response.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseFormat {
+    /// Default text output.
+    Text,
+    /// Request JSON-mode output (provider will return a valid JSON object).
+    JsonObject,
+}
+
+impl Default for ResponseFormat {
+    fn default() -> Self {
+        Self::Text
+    }
+}
+
 // ── Completion request / response ─────────────────────────────────────────
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompletionRequest {
@@ -119,6 +136,9 @@ pub struct CompletionRequest {
     pub temperature: Option<f32>,
     pub stream: bool,
     pub model: Option<String>,
+    /// Response format — set to `JsonObject` to enable structured JSON output.
+    #[serde(default)]
+    pub response_format: ResponseFormat,
 }
 
 impl CompletionRequest {
@@ -130,6 +150,7 @@ impl CompletionRequest {
             temperature: Some(0.7),
             stream: false,
             model: None,
+            response_format: ResponseFormat::default(),
         }
     }
 }

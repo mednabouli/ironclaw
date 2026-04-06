@@ -83,6 +83,7 @@ impl Agent for RouterAgent {
             temperature: Some(0.0),
             stream: false,
             model: None,
+            response_format: Default::default(),
         };
 
         let resp = provider.complete(req).await?;

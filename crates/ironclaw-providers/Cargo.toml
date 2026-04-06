@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-providers"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-providers"
+description = "LLM provider implementations (Ollama, Anthropic, OpenAI, Groq) for IronClaw"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [features]
 default    = ["ollama", "anthropic", "openai"]
@@ -12,7 +15,10 @@ anthropic  = []
 openai     = []
 groq       = []
 openrouter = []
-all        = ["ollama","anthropic","openai","groq","openrouter"]
+mistral    = []
+together   = []
+cohere     = []
+all        = ["ollama","anthropic","openai","groq","openrouter","mistral","together","cohere"]
 
 [dependencies]
 ironclaw-core   = { workspace = true }

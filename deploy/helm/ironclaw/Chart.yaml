@@ -1,0 +1,17 @@
+apiVersion: v2
+name: ironclaw
+description: IronClaw AI Agent Framework — ultra-lightweight, single-binary deployment
+type: application
+version: 0.1.0
+appVersion: "0.1.1"
+keywords:
+  - ai
+  - agent
+  - llm
+  - rust
+maintainers:
+  - name: IronClaw Authors
+    url: https://github.com/mednabouli/ironclaw
+home: https://github.com/mednabouli/ironclaw
+sources:
+  - https://github.com/mednabouli/ironclaw

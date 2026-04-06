@@ -59,16 +59,55 @@ size: release
     @ls -lh target/release/ironclaw | awk '{print "Binary size: " $5}'
     @file target/release/ironclaw
 
+# Binary size audit — top crate contributors (requires: cargo install cargo-bloat)
+bloat:
+    cargo bloat --release --crates -p ironclaw-cli -n 20
+
+# Detailed binary size audit with per-function breakdown
+bloat-full:
+    cargo bloat --release -p ironclaw-cli -n 40
+
+# Cross-compile for x86_64 Linux musl (static)
+cross-x86:
+    cross build --release --target x86_64-unknown-linux-musl -p ironclaw-cli
+
 # Cross-compile for ARM64 Linux (requires: cargo install cross)
 cross-arm:
-    cross build --release --target aarch64-unknown-linux-musl
+    cross build --release --target aarch64-unknown-linux-musl -p ironclaw-cli
 
 # Cross-compile for ARMv7 (Raspberry Pi 2/3)
 cross-armv7:
-    cross build --release --target armv7-unknown-linux-musleabihf
+    cross build --release --target armv7-unknown-linux-gnueabihf -p ironclaw-cli
 
-# Cross-compile for all targets
-cross-all: cross-arm cross-armv7
+# Cross-compile macOS x86_64 (native on Intel Mac, requires target on Apple Silicon)
+cross-macos-x86:
+    cargo build --release --target x86_64-apple-darwin -p ironclaw-cli
+
+# Cross-compile macOS Apple Silicon (native on AS, requires target on Intel Mac)
+cross-macos-arm:
+    cargo build --release --target aarch64-apple-darwin -p ironclaw-cli
+
+# Cross-compile all 5 targets (Linux via cross, macOS native)
+cross-all: cross-x86 cross-arm cross-armv7 cross-macos-x86 cross-macos-arm
+    @echo "✅ All 5 targets built"
+
+# Package all cross-compiled binaries into release archives
+package-all: cross-all
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p dist
+    for target in x86_64-unknown-linux-musl aarch64-unknown-linux-musl armv7-unknown-linux-gnueabihf; do
+        strip "target/$target/release/ironclaw" 2>/dev/null || true
+        tar czf "dist/ironclaw-$target.tar.gz" -C "target/$target/release" ironclaw
+        shasum -a 256 "dist/ironclaw-$target.tar.gz" > "dist/ironclaw-$target.tar.gz.sha256"
+    done
+    for target in x86_64-apple-darwin aarch64-apple-darwin; do
+        strip "target/$target/release/ironclaw" 2>/dev/null || true
+        tar czf "dist/ironclaw-$target.tar.gz" -C "target/$target/release" ironclaw
+        shasum -a 256 "dist/ironclaw-$target.tar.gz" > "dist/ironclaw-$target.tar.gz.sha256"
+    done
+    ls -lh dist/
+    @echo "✅ All archives in dist/"
 
 # ── Run ───────────────────────────────────────────────────────────────────
 
@@ -130,3 +169,11 @@ update:
 # Audit dependencies for known vulnerabilities
 audit:
     cargo audit
+
+# Generate CHANGELOG.md from conventional commits using git-cliff
+changelog:
+    git cliff --output CHANGELOG.md
+
+# Preview changelog for unreleased changes
+changelog-preview:
+    git cliff --unreleased

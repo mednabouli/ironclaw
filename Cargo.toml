@@ -63,6 +63,12 @@ thiserror    = "2"
 # Observability
 tracing             = "0.1"
 tracing-subscriber  = { version = "0.3", features = ["env-filter", "json"] }
+tracing-opentelemetry = "0.28"
+opentelemetry       = "0.27"
+opentelemetry_sdk   = { version = "0.27", features = ["rt-tokio"] }
+opentelemetry-otlp  = { version = "0.27", features = ["tonic"] }
+metrics             = "0.24"
+metrics-exporter-prometheus = "0.16"
 
 # HTTP
 reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
@@ -82,6 +88,10 @@ serenity = { version = "0.12", default-features = false, features = ["client", "
 dashmap = "6"
 uuid    = { version = "1", features = ["v4", "serde"] }
 chrono  = { version = "0.4", features = ["serde"] }
+regex-lite = "0.1"
+
+# Benchmarking
+criterion = { version = "0.5", features = ["html_reports"] }
 
 # ── Release profile: minimize binary size ─────────────────────────────────
 [profile.release]

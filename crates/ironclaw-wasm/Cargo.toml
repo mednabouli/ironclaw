@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-wasm"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-wasm"
+description = "WASM Component Model plugin runtime for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [dependencies]
 ironclaw-core = { workspace = true }

@@ -102,6 +102,17 @@ async fn health_handler() -> Json<HealthResponse> {
     })
 }
 
+/// Prometheus metrics endpoint — returns text exposition format.
+async fn metrics_handler() -> Response {
+    let body = crate::metrics::render();
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+        body,
+    )
+        .into_response()
+}
+
 /// SSE streaming chat endpoint.
 /// Calls `handler.handle_stream()` and converts each `StreamEvent` into an
 /// SSE `Event` with event type and JSON data.
@@ -192,8 +203,9 @@ impl Channel for RestChannel {
             .route("/v1/chat", post(chat_handler))
             .route("/v1/chat/stream", post(stream_chat_handler))
             .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
-            // Public route — no auth required
+            // Public routes — no auth required
             .route("/health", get(health_handler))
+            .route("/metrics", get(metrics_handler))
             .with_state(state);
 
         let addr: SocketAddr = format!("{}:{}", self.config.host, self.config.port)
@@ -232,6 +244,7 @@ mod tests {
             .route("/v1/chat/stream", post(stream_chat_handler))
             .route_layer(middleware::from_fn_with_state(state.clone(), require_auth))
             .route("/health", get(health_handler))
+            .route("/metrics", get(metrics_handler))
             .with_state(state)
     }
 

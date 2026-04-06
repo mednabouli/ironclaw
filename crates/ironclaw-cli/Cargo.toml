@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-cli"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-cli"
+description = "CLI binary for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [[bin]]
 name = "ironclaw"
@@ -21,7 +24,32 @@ ironclaw-agents    = { workspace = true }
 
 tokio        = { workspace = true }
 anyhow       = { workspace = true }
+serde        = { workspace = true }
 tracing      = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde_json   = { workspace = true }
 clap         = { version = "4", features = ["derive"] }
+clap_complete = "4"
+indicatif    = "0.17"
+atty         = "0.2"
+reqwest      = { workspace = true }
+
+[features]
+default = []
+otel    = ["tracing-opentelemetry", "opentelemetry", "opentelemetry_sdk", "opentelemetry-otlp"]
+
+[dependencies.tracing-opentelemetry]
+workspace = true
+optional = true
+
+[dependencies.opentelemetry]
+workspace = true
+optional = true
+
+[dependencies.opentelemetry_sdk]
+workspace = true
+optional = true
+
+[dependencies.opentelemetry-otlp]
+workspace = true
+optional = true

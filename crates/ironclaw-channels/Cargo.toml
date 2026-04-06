@@ -1,9 +1,12 @@
 
 [package]
-name    = "ironclaw-channels"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
+name        = "ironclaw-channels"
+description = "Communication channels (CLI, REST, Telegram, Discord) for the IronClaw AI agent framework"
+version.workspace    = true
+edition.workspace    = true
+license.workspace    = true
+homepage.workspace   = true
+repository.workspace = true
 
 [features]
 default   = ["rest", "cli"]
@@ -37,6 +40,9 @@ reqwest      = { workspace = true, optional = true }
 dashmap  = { workspace = true }
 uuid   = { workspace = true }
 chrono = { workspace = true }
+regex-lite = { workspace = true }
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
 
 [dev-dependencies]
 tower = { version = "0.4", features = ["util"] }
