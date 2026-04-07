@@ -16,6 +16,37 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
 
+[policy.ironclaw-agents]
+audit-as-crates-io = false
+
+[policy.ironclaw-channels]
+audit-as-crates-io = false
+
+[policy.ironclaw-cli]
+audit-as-crates-io = false
+
+[policy.ironclaw-config]
+audit-as-crates-io = false
+
+[policy.ironclaw-core]
+audit-as-crates-io = false
+
+[policy.ironclaw-memory]
+audit-as-crates-io = false
+
+[policy.ironclaw-providers]
+audit-as-crates-io = false
+
+[policy.ironclaw-tools]
+audit-as-crates-io = false
+
+[policy.ironclaw-wasm]
+audit-as-crates-io = false
+
+[[exemptions.addr2line]]
+version = "0.17.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.ahash]]
 version = "0.8.12"
 criteria = "safe-to-deploy"
@@ -266,6 +297,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.event-listener]]
 version = "5.4.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.fallible-iterator]]
+version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.fastrand]]
@@ -520,6 +555,10 @@ criteria = "safe-to-deploy"
 version = "0.2.184"
 criteria = "safe-to-deploy"
 
+[[exemptions.libm]]
+version = "0.2.16"
+criteria = "safe-to-deploy"
+
 [[exemptions.libredox]]
 version = "0.1.15"
 criteria = "safe-to-deploy"
@@ -538,6 +577,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.lru-slab]]
 version = "0.1.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.mach2]]
+version = "0.4.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.matchit]]
@@ -586,6 +629,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.num-bigint]]
 version = "0.4.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.object]]
+version = "0.36.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.once_cell]]
@@ -988,6 +1035,10 @@ criteria = "safe-to-deploy"
 version = "0.1.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.target-lexicon]]
+version = "0.13.5"
+criteria = "safe-to-deploy"
+
 [[exemptions.teloxide]]
 version = "0.17.0"
 criteria = "safe-to-deploy"
@@ -1003,6 +1054,10 @@ criteria = "safe-to-deploy"
 [[exemptions.tempfile]]
 version = "3.27.0"
 criteria = "safe-to-run"
+
+[[exemptions.termcolor]]
+version = "1.4.1"
+criteria = "safe-to-deploy"
 
 [[exemptions.thiserror]]
 version = "1.0.69"
@@ -1122,10 +1177,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tracing-opentelemetry]]
 version = "0.28.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.tracing-serde]]
-version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.tracing-subscriber]]

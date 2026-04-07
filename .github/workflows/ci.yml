@@ -150,8 +150,14 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          # Extract ironclaw-core line coverage from Cobertura XML
-          TOTAL=$(grep -oP 'line-rate="\K[^"]+' target/tarpaulin/cobertura.xml | head -1)
+          # Extract ironclaw-core/src package line-rate from Cobertura XML
+          # (tarpaulin may include other crate files; we only gate on core)
+          TOTAL=$(grep -oP 'name="crates/ironclaw-core/src"[^>]*line-rate="\K[^"]+' \
+            target/tarpaulin/cobertura.xml | head -1)
+          if [ -z "$TOTAL" ]; then
+            echo "::error::Could not find ironclaw-core/src coverage in Cobertura XML"
+            exit 1
+          fi
           PCT=$(echo "$TOTAL * 100" | bc -l | xargs printf "%.1f")
           echo "Coverage: ${PCT}%"
           # Fail if below 80%
